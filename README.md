@@ -2,7 +2,8 @@
 
 ## Requirements
 
-Installed headers for __apache2__, __libmaxminddb__ and optional for __pcre2__.
+Installed headers for __apache2__, __libmaxminddb__ and optional for __pcre2__. 
+Download the ASN database with __geoipupdate__.
 
 RHEL based
 
