@@ -94,7 +94,7 @@ jobs:
           load: true
 
       - name: Build RPM
-        run: docker run --privileged --cap-add=SYS_ADMIN -t --rm mock:latest -v mod_repudiator:/root/mod_repudiator sh -c "cd /root/mod_repudiator ; mock -r rocky+epel-${{ matrix.version }}-x86_64 --spec mod_repudiator.spec --sources ."
+        run: docker run --privileged --cap-add=SYS_ADMIN -t --rm -v mod_repudiator:/root/mod_repudiator mock:latest sh -c "cd /root/mod_repudiator ; mock -r rocky+epel-${{ matrix.version }}-x86_64 --spec mod_repudiator.spec --sources ."
 
   #########################################################################################
   ## Build Package
