@@ -21,6 +21,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install epel
+        run: dnf -y install epel-release
+
+      - name: Enable crb
+        run: crb enable
+
       - name: Install dependencies
         run: dnf -y install gcc httpd-devel libmaxminddb-devel pcre2-devel redhat-rpm-config
 
