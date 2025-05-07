@@ -10,6 +10,7 @@ Source0:        mod_repudiator.c
 Source1:        mod_repudiator.conf
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
+BuildRequires:  gcc
 BuildRequires:  httpd-devel
 BuildRequires:  libmaxminddb-devel
 BuildRequires:  pcre2-devel
