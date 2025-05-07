@@ -202,5 +202,5 @@ jobs:
       - name: Upload package.zip artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "mod_repudiator-rl8-${{ steps.vars.outputs.branch }}_(${{ steps.vars.outputs.sha_short }})"
+          name: "mod_repudiator-rl9-${{ steps.vars.outputs.branch }}_(${{ steps.vars.outputs.sha_short }})"
           path: ./package
