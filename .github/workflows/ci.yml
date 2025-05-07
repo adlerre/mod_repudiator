@@ -14,11 +14,11 @@ jobs:
       - name: Install dependencies
         run: sudo apt -y install gcc apache2-dev libmaxminddb-dev libpcre2-dev
 
-      - if: ${{ matrix.build == regex }}
+      - if: ${{ matrix.build == 'regex' }}
         name: Build module
         run: apxs -c -lmaxminddb mod_repudiator.c
 
-      - if: ${{ matrix.build == pcre2 }}
+      - if: ${{ matrix.build == 'pcre2' }}
         name: Build module
         run: apxs -c -DPCRE2 -lmaxminddb mod_repudiator.c
 
