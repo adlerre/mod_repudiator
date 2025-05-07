@@ -5,21 +5,29 @@ on: [ push, pull_request ]
 jobs:
   build-ubuntu:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        build: [ regex, pcre2 ]
     steps:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
         run: sudo apt -y install gcc apache2-dev libmaxminddb-dev libpcre2-dev
 
-      - name: Build module
+      - if: ${{ matrix.build == regex }}
+        name: Build module
         run: apxs -c -lmaxminddb mod_repudiator.c
+
+      - if: ${{ matrix.build == pcre2 }}
+        name: Build module
+        run: apxs -c -DPCRE2 -lmaxminddb mod_repudiator.c
 
       - name: Update generated-files cache on every commit
         uses: actions/cache@v4
         with:
           path: |
             .libs/mod_repudiator.so
-          key: generated-files-${{ github.run_id }}-ubuntu
+          key: generated-files-${{ github.run_id }}-ubuntu-${{ matrix.build }}
           restore-keys: generated-files
 
   build-rocky8:
@@ -82,6 +90,9 @@ jobs:
   package-ubuntu:
     runs-on: ubuntu-latest
     needs: build-ubuntu
+    strategy:
+      matrix:
+        build: [ regex, pcre2 ]
     steps:
       - uses: actions/checkout@v4
 
@@ -90,14 +101,14 @@ jobs:
         with:
           path: |
             .libs/mod_repudiator.so
-          key: generated-files-${{ github.run_id }}-ubuntu
+          key: generated-files-${{ github.run_id }}-ubuntu-${{ matrix.build }}
           restore-keys: generated-files
 
       - name: Update package cache on every commit
         uses: actions/cache@v4
         with:
           path: package
-          key: package-${{ github.run_id }}-ubuntu
+          key: package-${{ github.run_id }}-ubuntu-${{ matrix.build }}
           restore-keys: package
 
       - name: Set Variables
@@ -118,7 +129,7 @@ jobs:
       - name: Upload package.zip artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "mod_repudiator-ubuntu-${{ steps.vars.outputs.branch }}_(${{ steps.vars.outputs.sha_short }})"
+          name: "mod_repudiator-ubuntu-${{ matrix.build }}-${{ steps.vars.outputs.branch }}_(${{ steps.vars.outputs.sha_short }})"
           path: ./package
 
   package-rocky8:
