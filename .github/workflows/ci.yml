@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: sudo apt -y install gcc apache2-dev libmaxminddb-dev libpcre2-dev
+        run: dnf -y install gcc httpd-devel libmaxminddb-devel pcre2-devel redhat-rpm-config
 
       - name: Build module
         run: apxs -c mod_repudiator.c -lmaxminddb
