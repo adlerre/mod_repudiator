@@ -1,0 +1,17 @@
+name: mod_repudiator CI
+
+on: [ push, pull_request ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install dependencies
+        run: apt -y install gcc apache2-dev libmaxminddb-dev libpcre2-dev
+
+      - name: Build module
+        run: apxs -c mod_repudiator.c -lmaxminddb
