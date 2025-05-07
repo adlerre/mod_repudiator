@@ -5,27 +5,39 @@ on: [ push, pull_request ]
 jobs:
   build-ubuntu:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        build: [ regex, pcre2 ]
     steps:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
         run: sudo apt -y install gcc apache2-dev libmaxminddb-dev libpcre2-dev
 
-      - name: Build module
+      - if: ${{ matrix.build == 'regex' }}
+        name: Build module
         run: apxs -c -lmaxminddb mod_repudiator.c
+
+      - if: ${{ matrix.build == 'pcre2' }}
+        name: Build module
+        run: apxs -c -DPCRE2 -lmaxminddb mod_repudiator.c
 
       - name: Update generated-files cache on every commit
         uses: actions/cache@v4
         with:
           path: |
             .libs/mod_repudiator.so
-          key: generated-files-${{ github.run_id }}-ubuntu
+          key: generated-files-${{ github.run_id }}-ubuntu-${{ matrix.build }}
           restore-keys: generated-files
 
-  build-rocky8:
+  build-rocky:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: [ 8, 9 ]
+        build: [ regex, pcre2 ]
     container:
-      image: rockylinux/rockylinux:8
+      image: rockylinux/rockylinux:${{ matrix.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -38,42 +50,20 @@ jobs:
       - name: Install dependencies
         run: dnf -y install gcc httpd-devel libmaxminddb-devel pcre2-devel redhat-rpm-config
 
-      - name: Build module
+      - if: ${{ matrix.build == 'regex' }}
+        name: Build module
         run: apxs -c -lmaxminddb mod_repudiator.c
+
+      - if: ${{ matrix.build == 'pcre2' }}
+        name: Build module
+        run: apxs -c -DPCRE2 -lmaxminddb mod_repudiator.c
 
       - name: Update generated-files cache on every commit
         uses: actions/cache@v4
         with:
           path: |
             .libs/mod_repudiator.so
-          key: generated-files-${{ github.run_id }}-rl8
-          restore-keys: generated-files
-
-  build-rocky9:
-    runs-on: ubuntu-latest
-    container:
-      image: rockylinux/rockylinux:9
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install EPEL
-        run: dnf -y install epel-release
-
-      - name: Enable CRB
-        run: crb enable
-
-      - name: Install dependencies
-        run: dnf -y install gcc httpd-devel libmaxminddb-devel pcre2-devel redhat-rpm-config
-
-      - name: Build module
-        run: apxs -c -lmaxminddb mod_repudiator.c
-
-      - name: Update generated-files cache on every commit
-        uses: actions/cache@v4
-        with:
-          path: |
-            .libs/mod_repudiator.so
-          key: generated-files-${{ github.run_id }}-rl9
+          key: generated-files-${{ github.run_id }}-rl${{ matrix.version }}-${{ matrix.build }}
           restore-keys: generated-files
 
   #########################################################################################
@@ -82,6 +72,9 @@ jobs:
   package-ubuntu:
     runs-on: ubuntu-latest
     needs: build-ubuntu
+    strategy:
+      matrix:
+        build: [ regex, pcre2 ]
     steps:
       - uses: actions/checkout@v4
 
@@ -90,14 +83,14 @@ jobs:
         with:
           path: |
             .libs/mod_repudiator.so
-          key: generated-files-${{ github.run_id }}-ubuntu
+          key: generated-files-${{ github.run_id }}-ubuntu-${{ matrix.build }}
           restore-keys: generated-files
 
       - name: Update package cache on every commit
         uses: actions/cache@v4
         with:
           path: package
-          key: package-${{ github.run_id }}-ubuntu
+          key: package-${{ github.run_id }}-ubuntu-${{ matrix.build }}
           restore-keys: package
 
       - name: Set Variables
@@ -118,12 +111,16 @@ jobs:
       - name: Upload package.zip artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "mod_repudiator-ubuntu-${{ steps.vars.outputs.branch }}_(${{ steps.vars.outputs.sha_short }})"
+          name: "mod_repudiator-ubuntu-${{ matrix.build }}-${{ steps.vars.outputs.branch }}_(${{ steps.vars.outputs.sha_short }})"
           path: ./package
 
-  package-rocky8:
+  package-rocky:
     runs-on: ubuntu-latest
-    needs: build-rocky8
+    needs: build-rocky
+    strategy:
+      matrix:
+        version: [ 8, 9 ]
+        build: [ regex, pcre2 ]
     steps:
       - uses: actions/checkout@v4
 
@@ -132,14 +129,14 @@ jobs:
         with:
           path: |
             .libs/mod_repudiator.so
-          key: generated-files-${{ github.run_id }}-rl8
+          key: generated-files-${{ github.run_id }}-rl${{ matrix.version }}-${{ matrix.build }}
           restore-keys: generated-files
 
       - name: Update package cache on every commit
         uses: actions/cache@v4
         with:
           path: package
-          key: package-${{ github.run_id }}-rl8
+          key: package-${{ github.run_id }}-rl${{ matrix.version }}-${{ matrix.build }}
           restore-keys: package
 
       - name: Set Variables
@@ -160,47 +157,5 @@ jobs:
       - name: Upload package.zip artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "mod_repudiator-rl8-${{ steps.vars.outputs.branch }}_(${{ steps.vars.outputs.sha_short }})"
-          path: ./package
-
-  package-rocky9:
-    runs-on: ubuntu-latest
-    needs: build-rocky9
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Update generated-files cache on every commit
-        uses: actions/cache@v4
-        with:
-          path: |
-            .libs/mod_repudiator.so
-          key: generated-files-${{ github.run_id }}-rl9
-          restore-keys: generated-files
-
-      - name: Update package cache on every commit
-        uses: actions/cache@v4
-        with:
-          path: package
-          key: package-${{ github.run_id }}-rl9
-          restore-keys: package
-
-      - name: Set Variables
-        id: vars
-        run: |
-          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-          echo "branch=$(echo ${{ github.ref_name }} | tr / __)" >> $GITHUB_OUTPUT
-
-      - name: Prepare package*.zip artifact
-        run: |
-          rm -rf package
-          mkdir -p package
-          rm -rf package/*.zip
-          cp -f ".libs/mod_repudiator.so" "package/mod_repudiator.so"
-          cp -f "mod_repudiator.conf" "package/mod_repudiator.conf"
-          cd ./package
-
-      - name: Upload package.zip artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: "mod_repudiator-rl9-${{ steps.vars.outputs.branch }}_(${{ steps.vars.outputs.sha_short }})"
+          name: "mod_repudiator-rl${{ matrix.version }}-${{ matrix.build }}-${{ steps.vars.outputs.branch }}_(${{ steps.vars.outputs.sha_short }})"
           path: ./package
