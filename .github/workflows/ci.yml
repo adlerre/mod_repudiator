@@ -15,3 +15,18 @@ jobs:
 
       - name: Build module
         run: apxs -c mod_repudiator.c -lmaxminddb
+
+  build-rocky9:
+    runs-on: ubuntu-latest
+    container:
+      image: rockylinux/rockylinux:9
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install dependencies
+        run: sudo apt -y install gcc apache2-dev libmaxminddb-dev libpcre2-dev
+
+      - name: Build module
+        run: apxs -c mod_repudiator.c -lmaxminddb
