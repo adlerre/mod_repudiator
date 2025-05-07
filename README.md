@@ -20,19 +20,19 @@ apt -y install gcc apache2-dev libmaxminddb-dev libpcre2-dev
 ## Build
 
 ```bash
-apxs -i -a -c mod_repudiator.c -lmaxminddb
+apxs -c -lmaxminddb mod_repudiator.c
 ```
 
 With __pcre2__ support
 
 ```bash
-apxs -i -a -c mod_repudiator.c -D PCRE2 -lmaxminddb -lpcre2-8
+apxs -c -DPCRE2 -lmaxminddb -lpcre2-8 mod_repudiator.c
 ```
 
 Debug build
 
 ```bash
-apxs -i -a -c mod_repudiator.c -D PCRE2 -D REP_DEBUG -lmaxminddb -lpcre2-8
+apxs -c -DPCRE2 -DREP_DEBUG -lmaxminddb -lpcre2-8 mod_repudiator.c
 ```
 
 ## Modul config
