@@ -37,7 +37,7 @@ jobs:
         version: [ 8, 9 ]
         build: [ regex, pcre2 ]
     container:
-      image: rockylinux/rockylinux:${{ matrix.images }}
+      image: rockylinux/rockylinux:${{ matrix.version }}
     steps:
       - uses: actions/checkout@v4
 
