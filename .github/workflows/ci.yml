@@ -74,22 +74,24 @@ jobs:
     strategy:
       matrix:
         version: [ 8, 9 ]
-    container:
-      image: rockylinux/rockylinux:8
     steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - uses: actions/checkout@v4
 
-      - name: Install EPEL
-        run: dnf -y install epel-release
-
-      - name: Enable CRB
-        run: crb enable
-
-      - name: Install mock
-        run: dnf -y install mock
+      - name: Build new image with mock in it and Load it into Docker for testing
+        uses: docker/build-push-action@v6
+        with:
+          tags: mock:latest
+          file: .github/workflows/Dockerfile
+          context: .
+          pull: true
+          push: false
+          load: true
 
       - name: Build RPM
-        run: mock -r rocky+epel-${{ matrix.version }}-x86_64 --spec mod_repudiator.spec --sources .
+        run: docker run --privileged --cap-add=SYS_ADMIN -t --rm mock:latest -v $PWD:/root/mod_repudiator sh -c "cd /root/mod_repudiator ; mock -r rocky+epel-${{ matrix.version }}-x86_64 --spec mod_repudiator.spec --sources ."
 
   #########################################################################################
   ## Build Package
