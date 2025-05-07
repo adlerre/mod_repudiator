@@ -97,13 +97,16 @@ jobs:
         run: |
           mkdir mock
           docker run --privileged --cap-add=SYS_ADMIN -t --rm -v $PWD/mod_repudiator:/root/mod_repudiator -v $PWD/mock:/var/lib/mock mock:latest sh -c "mock -r rocky+epel-${{ matrix.version }}-x86_64 --spec /root/mod_repudiator/mod_repudiator.spec --sources /root/mod_repudiator"
-          ls -la mock/rocky+epel-${{ matrix.version }}-x86_64/result
 
-      - name: Upload RPMs
+      - name: Find RPMs
+        run: |
+          find mock/rocky+epel-${{ matrix.version }}-x86_64/result -type f -name "mod_repudiator*x86_64.rpm"|xargs -i echo "rpmPath={}" >> $GITHUB_ENV
+          find mock/rocky+epel-${{ matrix.version }}-x86_64/result -type f -name "mod_repudiator*x86_64.rpm"|xargs -i echo "srcRpmPath={}" >> $GITHUB_ENV
+
+      - name: Upload RPM
         uses: actions/upload-artifact@v4
         with:
-          name: rocky-${{ matrix.version }}-x86_64
-          path: mock/rocky+epel-${{ matrix.version }}-x86_64/result/mod_repudiator*.rpm
+          path: ${{ env.rpmPath }}
 
   #########################################################################################
   ## Build Package
