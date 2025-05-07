@@ -24,7 +24,7 @@ jobs:
       - name: Install EPEL
         run: dnf -y install epel-release
 
-      - name: Enable crb
+      - name: Enable CRB
         run: crb enable
 
       - name: Install dependencies
@@ -43,7 +43,7 @@ jobs:
       - name: Install EPEL
         run: dnf -y install epel-release
 
-      - name: Enable crb
+      - name: Enable CRB
         run: crb enable
 
       - name: Install dependencies
