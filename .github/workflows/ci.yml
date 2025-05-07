@@ -63,7 +63,7 @@ jobs:
         with:
           path: |
             .libs/mod_repudiator.so
-          key: generated-files-${{ github.run_id }}-rl${{ matrix.images }}-${{ matrix.build }}
+          key: generated-files-${{ github.run_id }}-rl${{ matrix.version }}-${{ matrix.build }}
           restore-keys: generated-files
 
   #########################################################################################
@@ -129,14 +129,14 @@ jobs:
         with:
           path: |
             .libs/mod_repudiator.so
-          key: generated-files-${{ github.run_id }}-rl${{ matrix.images }}-${{ matrix.build }}
+          key: generated-files-${{ github.run_id }}-rl${{ matrix.version }}-${{ matrix.build }}
           restore-keys: generated-files
 
       - name: Update package cache on every commit
         uses: actions/cache@v4
         with:
           path: package
-          key: package-${{ github.run_id }}-rl${{ matrix.images }}-${{ matrix.build }}
+          key: package-${{ github.run_id }}-rl${{ matrix.version }}-${{ matrix.build }}
           restore-keys: package
 
       - name: Set Variables
@@ -157,5 +157,5 @@ jobs:
       - name: Upload package.zip artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "mod_repudiator-rl${{ matrix.images }}-${{ matrix.build }}-${{ steps.vars.outputs.branch }}_(${{ steps.vars.outputs.sha_short }})"
+          name: "mod_repudiator-rl${{ matrix.version }}-${{ matrix.build }}-${{ steps.vars.outputs.branch }}_(${{ steps.vars.outputs.sha_short }})"
           path: ./package
