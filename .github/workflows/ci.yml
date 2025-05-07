@@ -20,7 +20,7 @@ jobs:
 
       - if: ${{ matrix.build == 'pcre2' }}
         name: Build module
-        run: apxs -c -DPCRE2 -lmaxminddb mod_repudiator.c
+        run: apxs -c -DPCRE2 -lmaxminddb -lpcre2-8 mod_repudiator.c
 
       - name: Update generated-files cache on every commit
         uses: actions/cache@v4
@@ -56,7 +56,7 @@ jobs:
 
       - if: ${{ matrix.build == 'pcre2' }}
         name: Build module
-        run: apxs -c -DPCRE2 -lmaxminddb mod_repudiator.c
+        run: apxs -c -DPCRE2 -lmaxminddb -lpcre2-8 mod_repudiator.c
 
       - name: Update generated-files cache on every commit
         uses: actions/cache@v4
