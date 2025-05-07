@@ -1,0 +1,206 @@
+name: mod_repudiator CI
+
+on: [ push, pull_request ]
+
+jobs:
+  build-ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt -y install gcc apache2-dev libmaxminddb-dev libpcre2-dev
+
+      - name: Build module
+        run: apxs -c mod_repudiator.c -lmaxminddb
+
+      - name: Update generated-files cache on every commit
+        uses: actions/cache@v4
+        with:
+          path: |
+            .libs/mod_repudiator.so
+          key: generated-files-${{ github.run_id }}-ubuntu
+          restore-keys: generated-files
+
+  build-rocky8:
+    runs-on: ubuntu-latest
+    container:
+      image: rockylinux/rockylinux:8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install EPEL
+        run: dnf -y install epel-release
+
+      - name: Enable CRB
+        run: crb enable
+
+      - name: Install dependencies
+        run: dnf -y install gcc httpd-devel libmaxminddb-devel pcre2-devel redhat-rpm-config
+
+      - name: Build module
+        run: apxs -c mod_repudiator.c -lmaxminddb
+
+      - name: Update generated-files cache on every commit
+        uses: actions/cache@v4
+        with:
+          path: |
+            .libs/mod_repudiator.so
+          key: generated-files-${{ github.run_id }}-rl8
+          restore-keys: generated-files
+
+  build-rocky9:
+    runs-on: ubuntu-latest
+    container:
+      image: rockylinux/rockylinux:9
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install EPEL
+        run: dnf -y install epel-release
+
+      - name: Enable CRB
+        run: crb enable
+
+      - name: Install dependencies
+        run: dnf -y install gcc httpd-devel libmaxminddb-devel pcre2-devel redhat-rpm-config
+
+      - name: Build module
+        run: apxs -c mod_repudiator.c -lmaxminddb
+
+      - name: Update generated-files cache on every commit
+        uses: actions/cache@v4
+        with:
+          path: |
+            .libs/mod_repudiator.so
+          key: generated-files-${{ github.run_id }}-rl9
+          restore-keys: generated-files
+
+  #########################################################################################
+  ## Build Package
+  #########################################################################################
+  package-ubuntu:
+    runs-on: ubuntu-latest
+    needs: build-ubuntu
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update generated-files cache on every commit
+        uses: actions/cache@v4
+        with:
+          path: |
+            .libs/mod_repudiator.so
+          key: generated-files-${{ github.run_id }}-ubuntu
+          restore-keys: generated-files
+
+      - name: Update package cache on every commit
+        uses: actions/cache@v4
+        with:
+          path: package
+          key: package-${{ github.run_id }}-ubuntu
+          restore-keys: package
+
+      - name: Set Variables
+        id: vars
+        run: |
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "branch=$(echo ${{ github.ref_name }} | tr / __)" >> $GITHUB_OUTPUT
+
+      - name: Prepare package*.zip artifact
+        run: |
+          rm -rf package
+          mkdir -p package
+          rm -rf package/*.zip
+          cp -f ".libs/mod_repudiator.so" "package/mod_repudiator.so"
+          cp -f "mod_repudiator.conf" "package/mod_repudiator.conf"
+          cd ./package
+
+      - name: Upload package.zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: "mod_repudiator-ubuntu-${{ steps.vars.outputs.branch }}_(${{ steps.vars.outputs.sha_short }})"
+          path: ./package
+
+  package-rocky8:
+    runs-on: ubuntu-latest
+    needs: build-rocky8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update generated-files cache on every commit
+        uses: actions/cache@v4
+        with:
+          path: |
+            .libs/mod_repudiator.so
+          key: generated-files-${{ github.run_id }}-rl8
+          restore-keys: generated-files
+
+      - name: Update package cache on every commit
+        uses: actions/cache@v4
+        with:
+          path: package
+          key: package-${{ github.run_id }}-rl8
+          restore-keys: package
+
+      - name: Set Variables
+        id: vars
+        run: |
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "branch=$(echo ${{ github.ref_name }} | tr / __)" >> $GITHUB_OUTPUT
+
+      - name: Prepare package*.zip artifact
+        run: |
+          rm -rf package
+          mkdir -p package
+          rm -rf package/*.zip
+          cp -f ".libs/mod_repudiator.so" "package/mod_repudiator.so"
+          cp -f "mod_repudiator.conf" "package/mod_repudiator.conf"
+          cd ./package
+
+      - name: Upload package.zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: "mod_repudiator-rl8-${{ steps.vars.outputs.branch }}_(${{ steps.vars.outputs.sha_short }})"
+          path: ./package
+
+  package-rocky9:
+    runs-on: ubuntu-latest
+    needs: build-rocky9
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update generated-files cache on every commit
+        uses: actions/cache@v4
+        with:
+          path: |
+            .libs/mod_repudiator.so
+          key: generated-files-${{ github.run_id }}-rl9
+          restore-keys: generated-files
+
+      - name: Update package cache on every commit
+        uses: actions/cache@v4
+        with:
+          path: package
+          key: package-${{ github.run_id }}-rl9
+          restore-keys: package
+
+      - name: Set Variables
+        id: vars
+        run: |
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "branch=$(echo ${{ github.ref_name }} | tr / __)" >> $GITHUB_OUTPUT
+
+      - name: Prepare package*.zip artifact
+        run: |
+          rm -rf package
+          mkdir -p package
+          rm -rf package/*.zip
+          cp -f ".libs/mod_repudiator.so" "package/mod_repudiator.so"
+          cp -f "mod_repudiator.conf" "package/mod_repudiator.conf"
+          cd ./package
+
+      - name: Upload package.zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: "mod_repudiator-rl9-${{ steps.vars.outputs.branch }}_(${{ steps.vars.outputs.sha_short }})"
+          path: ./package
