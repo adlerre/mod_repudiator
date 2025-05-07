@@ -74,11 +74,13 @@ jobs:
     strategy:
       matrix:
         version: [ 8, 9 ]
+    container:
+      image: rockylinux/rockylinux:8
     steps:
       - uses: actions/checkout@v4
 
       - name: Install mock
-        run: sudo apt -y install mock
+        run: dnf -y install mock
 
       - name: Build RPM
         run: mock -r rocky+epel-${{ matrix.version }}-x86_64 --spec mod_repudiator.spec --sources .
