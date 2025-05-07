@@ -67,6 +67,23 @@ jobs:
           restore-keys: generated-files
 
   #########################################################################################
+  ## Build RPMs
+  #########################################################################################
+  rpm-rocky:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: [ 8, 9 ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mock
+        run: sudo apt -y install mock
+
+      - name: Build RPM
+        run: mock -r rocky+epel-${{ matrix.version }}-x86_64 --spec mod_repudiator.spec --sources .
+
+  #########################################################################################
   ## Build Package
   #########################################################################################
   package-ubuntu:
