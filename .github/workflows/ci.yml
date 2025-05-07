@@ -12,7 +12,7 @@ jobs:
         run: sudo apt -y install gcc apache2-dev libmaxminddb-dev libpcre2-dev
 
       - name: Build module
-        run: apxs -c mod_repudiator.c -lmaxminddb
+        run: apxs -c -lmaxminddb mod_repudiator.c
 
       - name: Update generated-files cache on every commit
         uses: actions/cache@v4
@@ -39,7 +39,7 @@ jobs:
         run: dnf -y install gcc httpd-devel libmaxminddb-devel pcre2-devel redhat-rpm-config
 
       - name: Build module
-        run: apxs -c mod_repudiator.c -lmaxminddb
+        run: apxs -c -lmaxminddb mod_repudiator.c
 
       - name: Update generated-files cache on every commit
         uses: actions/cache@v4
@@ -66,7 +66,7 @@ jobs:
         run: dnf -y install gcc httpd-devel libmaxminddb-devel pcre2-devel redhat-rpm-config
 
       - name: Build module
-        run: apxs -c mod_repudiator.c -lmaxminddb
+        run: apxs -c -lmaxminddb mod_repudiator.c
 
       - name: Update generated-files cache on every commit
         uses: actions/cache@v4
