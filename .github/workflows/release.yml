@@ -295,9 +295,9 @@ jobs:
       pages: write
       id-token: write
     outputs:
-      new_release_git_tag: ${{ needs.package.outputs.new_release_git_tag }}
-      new_release_version: ${{ needs.package.outputs.new_release_version }}
-      new_release_notes: ${{ needs.package.outputs.new_release_notes }}
+      new_release_git_tag: ${{ needs.package-ubuntu.outputs.new_release_git_tag }}
+      new_release_version: ${{ needs.package-ubuntu.outputs.new_release_version }}
+      new_release_notes: ${{ needs.package-ubuntu.outputs.new_release_notes }}
 
     steps:
       - uses: actions/checkout@v4
@@ -315,14 +315,14 @@ jobs:
           mkdir -p release
           ls -la .
           cd ./package
-          zip -r ../release/mod_repudiator-ubuntu-${{ matrix.build }}-${{ needs.package.outputs.new_release_git_tag }}.zip .
+          zip -r ../release/mod_repudiator-ubuntu-${{ matrix.build }}-${{ needs.package-ubuntu.outputs.new_release_git_tag }}.zip .
 
       - name: Release artifacts
         uses: softprops/action-gh-release@v2.0.8
         with:
-          tag_name: ${{ needs.package.outputs.new_release_git_tag }}
-          name: ${{ needs.package.outputs.new_release_version }}
-          body: ${{ needs.package.outputs.new_release_notes }}
+          tag_name: ${{ needs.package-ubuntu.outputs.new_release_git_tag }}
+          name: ${{ needs.package-ubuntu.outputs.new_release_version }}
+          body: ${{ needs.package-ubuntu.outputs.new_release_notes }}
           files: |
             release/*
 
@@ -339,9 +339,9 @@ jobs:
       pages: write
       id-token: write
     outputs:
-      new_release_git_tag: ${{ needs.package.outputs.new_release_git_tag }}
-      new_release_version: ${{ needs.package.outputs.new_release_version }}
-      new_release_notes: ${{ needs.package.outputs.new_release_notes }}
+      new_release_git_tag: ${{ needs.package-rocky.outputs.new_release_git_tag }}
+      new_release_version: ${{ needs.package-rocky.outputs.new_release_version }}
+      new_release_notes: ${{ needs.package-rocky.outputs.new_release_notes }}
 
     steps:
       - uses: actions/checkout@v4
@@ -359,14 +359,14 @@ jobs:
           mkdir -p release
           ls -la .
           cd ./package
-          zip -r ../release/mod_repudiator-rl${{ matrix.version }}-${{ matrix.build }}-${{ needs.package.outputs.new_release_git_tag }}.zip .
+          zip -r ../release/mod_repudiator-rl${{ matrix.version }}-${{ matrix.build }}-${{ needs.package-rocky.outputs.new_release_git_tag }}.zip .
 
       - name: Release artifacts
         uses: softprops/action-gh-release@v2.0.8
         with:
-          tag_name: ${{ needs.package.outputs.new_release_git_tag }}
-          name: ${{ needs.package.outputs.new_release_version }}
-          body: ${{ needs.package.outputs.new_release_notes }}
+          tag_name: ${{ needs.package-rocky.outputs.new_release_git_tag }}
+          name: ${{ needs.package-rocky.outputs.new_release_version }}
+          body: ${{ needs.package-rocky.outputs.new_release_notes }}
           files: |
             release/*
 
@@ -382,9 +382,9 @@ jobs:
       pages: write
       id-token: write
     outputs:
-      new_release_git_tag: ${{ needs.package.outputs.new_release_git_tag }}
-      new_release_version: ${{ needs.package.outputs.new_release_version }}
-      new_release_notes: ${{ needs.package.outputs.new_release_notes }}
+      new_release_git_tag: ${{ needs.rpm-rocky.outputs.new_release_git_tag }}
+      new_release_version: ${{ needs.rpm-rocky.outputs.new_release_version }}
+      new_release_notes: ${{ needs.rpm-rocky.outputs.new_release_notes }}
 
     steps:
       - uses: actions/checkout@v4
@@ -402,13 +402,13 @@ jobs:
           mkdir -p release
           ls -la .
           cd ./package
-          zip -r ../release/mod_repudiator-rpms-rl${{ matrix.version }}-${{ matrix.build }}-${{ needs.package.outputs.new_release_git_tag }}.zip .
+          zip -r ../release/mod_repudiator-rpms-rl${{ matrix.version }}-${{ matrix.build }}-${{ needs.rpm-rocky.outputs.new_release_git_tag }}.zip .
 
       - name: Release artifacts
         uses: softprops/action-gh-release@v2.0.8
         with:
-          tag_name: ${{ needs.package.outputs.new_release_git_tag }}
-          name: ${{ needs.package.outputs.new_release_version }}
-          body: ${{ needs.package.outputs.new_release_notes }}
+          tag_name: ${{ needs.rpm-rocky.outputs.new_release_git_tag }}
+          name: ${{ needs.rpm-rocky.outputs.new_release_version }}
+          body: ${{ needs.rpm-rocky.outputs.new_release_notes }}
           files: |
             release/*
