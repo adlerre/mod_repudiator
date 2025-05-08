@@ -157,7 +157,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: package
-          key: package-rpms-${{ github.run_id }}-rl${{ matrix.version }}-${{ matrix.build }}
+          key: package-rpms-${{ github.run_id }}-rl${{ matrix.version }}
           restore-keys: package
 
       - name: Prepare package*.zip artifact
@@ -184,11 +184,11 @@ jobs:
       matrix:
         build: [ regex, pcre2 ]
     outputs:
-      new_release_git_tag: ${{ needs.semantic-release.outputs.new_release_git_tag }}
-      new_release_version: ${{ needs.semantic-release.outputs.new_release_version }}
-      new_release_notes: ${{ needs.semantic-release.outputs.new_release_notes }}
+      new_release_git_tag: ${{ needs.build-ubuntu.outputs.new_release_git_tag }}
+      new_release_version: ${{ needs.build-ubuntu.outputs.new_release_version }}
+      new_release_notes: ${{ needs.build-ubuntu.outputs.new_release_notes }}
     env:
-      RELEASE_VERSION: ${{ needs.semantic-release.outputs.new_release_git_tag }}
+      RELEASE_VERSION: ${{ needs.build-ubuntu.outputs.new_release_git_tag }}
     steps:
       - uses: actions/checkout@v4
 
@@ -236,11 +236,11 @@ jobs:
         version: [ 8, 9 ]
         build: [ regex, pcre2 ]
     outputs:
-      new_release_git_tag: ${{ needs.semantic-release.outputs.new_release_git_tag }}
-      new_release_version: ${{ needs.semantic-release.outputs.new_release_version }}
-      new_release_notes: ${{ needs.semantic-release.outputs.new_release_notes }}
+      new_release_git_tag: ${{ needs.build-rocky.outputs.new_release_git_tag }}
+      new_release_version: ${{ needs.build-rocky.outputs.new_release_version }}
+      new_release_notes: ${{ needs.build-rocky.outputs.new_release_notes }}
     env:
-      RELEASE_VERSION: ${{ needs.semantic-release.outputs.new_release_git_tag }}
+      RELEASE_VERSION: ${{ needs.build-rocky.outputs.new_release_git_tag }}
     steps:
       - uses: actions/checkout@v4
 
@@ -393,7 +393,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: package
-          key: package-rpms-${{ github.run_id }}-rl${{ matrix.version }}-${{ matrix.build }}
+          key: package-rpms-${{ github.run_id }}-rl${{ matrix.version }}
           restore-keys: package
 
       - name: Prepare artifacts for release
@@ -402,7 +402,7 @@ jobs:
           mkdir -p release
           ls -la .
           cd ./package
-          zip -r ../release/mod_repudiator-rpms-rl${{ matrix.version }}-${{ matrix.build }}-${{ needs.rpm-rocky.outputs.new_release_git_tag }}.zip .
+          zip -r ../release/mod_repudiator-rpms-rl${{ matrix.version }}-${{ needs.rpm-rocky.outputs.new_release_git_tag }}.zip .
 
       - name: Release artifacts
         uses: softprops/action-gh-release@v2.0.8
