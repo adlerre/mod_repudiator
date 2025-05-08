@@ -1,3 +1,12 @@
+## [1.0.3](https://github.com/adlerre/mod_repudiator/compare/v1.0.2...v1.0.3) (2025-05-08)
+
+
+### Bug Fixes
+
+* release RPMs direct ([369461a](https://github.com/adlerre/mod_repudiator/commit/369461a2f19e494c1a1707d39517fe861fd64efb))
+* snprintf instead of sprintf ([933721a](https://github.com/adlerre/mod_repudiator/commit/933721a5d985364951072faf46121cdeb1872ec6))
+* use release version instead for tag ([b70fa3e](https://github.com/adlerre/mod_repudiator/commit/b70fa3ee4bdd4a6450e2608c4bc07962429e37ac))
+
 ## [1.0.2](https://github.com/adlerre/mod_repudiator/compare/v1.0.1...v1.0.2) (2025-05-08)
 
 
