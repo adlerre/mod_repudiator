@@ -67,6 +67,55 @@ jobs:
           restore-keys: generated-files
 
   #########################################################################################
+  ## Build RPMs
+  #########################################################################################
+  rpm-rocky:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: [ 8, 9 ]
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - uses: actions/checkout@v4
+        with:
+          path: mod_repudiator
+          fetch-depth: 0
+
+      - name: Build Mock Environment
+        uses: docker/build-push-action@v6
+        with:
+          tags: mock:latest
+          file: mod_repudiator/.github/workflows/Dockerfile
+          context: .
+          pull: true
+          push: false
+          load: true
+
+      - name: Set Variables
+        id: vars
+        run: |
+          pushd .
+          cd mod_repudiator
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "branch=$(echo ${{ github.ref_name }} | tr / __)" >> $GITHUB_OUTPUT
+          popd
+
+      - name: Build RPM
+        run: |
+          sed -i "s/0.0.0/${{ steps.vars.outputs.sha_short }}/g" mod_repudiator/mod_repudiator.spec
+          cat mod_repudiator/mod_repudiator.spec
+          mkdir mock
+          docker run --privileged --cap-add=SYS_ADMIN -t --rm -v $PWD/mod_repudiator:/root/mod_repudiator -v $PWD/mock:/var/lib/mock mock:latest sh -c "mock -r rocky+epel-${{ matrix.version }}-x86_64 --spec /root/mod_repudiator/mod_repudiator.spec --sources /root/mod_repudiator"
+
+      - name: Upload RPM
+        uses: actions/upload-artifact@v4
+        with:
+          name: mod_repudiator-rl${{ matrix.version }}-x86_64-rpms
+          path: mock/rocky+epel-${{ matrix.version }}-x86_64/result/mod_repudiator*.rpm
+
+  #########################################################################################
   ## Build Package
   #########################################################################################
   package-ubuntu:
