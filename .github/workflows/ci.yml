@@ -101,11 +101,14 @@ jobs:
       - name: Find RPMs
         run: |
           find mock/rocky+epel-${{ matrix.version }}-x86_64/result -type f -name "mod_repudiator*x86_64.rpm"|xargs -i echo "rpmPath={}" >> $GITHUB_ENV
+          find mock/rocky+epel-${{ matrix.version }}-x86_64/result -type f -name "mod_repudiator*x86_64.rpm"|xargs basename|xargs -i echo "rpmName={}" >> $GITHUB_ENV
           find mock/rocky+epel-${{ matrix.version }}-x86_64/result -type f -name "mod_repudiator*x86_64.rpm"|xargs -i echo "srcRpmPath={}" >> $GITHUB_ENV
+          find mock/rocky+epel-${{ matrix.version }}-x86_64/result -type f -name "mod_repudiator*x86_64.rpm"|xargs basename|xargs -i echo "srcRpmName={}" >> $GITHUB_ENV
 
       - name: Upload RPM
         uses: actions/upload-artifact@v4
         with:
+          name: ${{ env.rpmName }}
           path: ${{ env.rpmPath }}
 
   #########################################################################################
