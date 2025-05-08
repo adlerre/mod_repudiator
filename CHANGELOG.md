@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/adlerre/mod_repudiator/compare/v1.0.0...v1.0.1) (2025-05-08)
+
+
+### Bug Fixes
+
+* artifact release ([fb4ac5f](https://github.com/adlerre/mod_repudiator/commit/fb4ac5f75cc9c37c77bc8ee909231ccb14014a5a))
+
 # 1.0.0 (2025-05-08)
 
 
