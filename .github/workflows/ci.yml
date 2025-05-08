@@ -101,7 +101,7 @@ jobs:
 
       - name: Build RPM
         run: |
-          sed -i 's/0.0.0.0/${{ steps.vars.outputs.sha_short }}/g' mod_repudiator/mod_repudiator.spec
+          sed -i 's/0.0.0/${{ steps.vars.outputs.sha_short }}/g' mod_repudiator/mod_repudiator.spec
           mkdir mock
           docker run --privileged --cap-add=SYS_ADMIN -t --rm -v $PWD/mod_repudiator:/root/mod_repudiator -v $PWD/mock:/var/lib/mock mock:latest sh -c "mock -r rocky+epel-${{ matrix.version }}-x86_64 --spec /root/mod_repudiator/mod_repudiator.spec --sources /root/mod_repudiator"
 
