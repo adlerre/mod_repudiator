@@ -96,8 +96,11 @@ jobs:
       - name: Set Variables
         id: vars
         run: |
-          echo "sha_short=$(git rev-parse --short HEAD mod_repudiator)" >> $GITHUB_OUTPUT
+          pushd .
+          cd mod_repudiator
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
           echo "branch=$(echo ${{ github.ref_name }} | tr / __)" >> $GITHUB_OUTPUT
+          popd
 
       - name: Build RPM
         run: |
