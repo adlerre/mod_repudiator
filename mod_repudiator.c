@@ -922,7 +922,7 @@ static int accessChecker(request_rec *r) {
                 inet_ntop(AF_INET6, &req->addr.mask.v6, mask, sizeof(mask));
             }
 
-            sprintf(asnStr, "AS%d", asn);
+            snprintf(asnStr, sizeof(asnStr), "AS%d", asn);
 
             ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
 #ifdef REP_DEBUG
