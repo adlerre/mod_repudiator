@@ -1,5 +1,5 @@
 Name:           mod_repudiator
-Version:        0.1.0
+Version:        0.0.0
 Release:        1%{?dist}
 Summary:        Reputation-based limiting/blocking of malicious clients for Apache
 
@@ -21,7 +21,7 @@ Requires:       httpd-mmn = %([ -a %{_includedir}/httpd/.mmn ] && cat %{_include
 Reputation-based limiting/blocking of malicious clients for Apache
 
 %build
-apxs -DPCRE2 -lmaxminddb -lpcre2-8 -Wc,"%{optflags}" -c %{SOURCE0}
+apxs -c -DPCRE2 -lmaxminddb -lpcre2-8 -Wc,"%{optflags}" %{SOURCE0}
 
 
 %install
