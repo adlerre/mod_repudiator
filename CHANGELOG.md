@@ -1,3 +1,16 @@
+# [1.1.0](https://github.com/adlerre/mod_repudiator/compare/v1.0.3...v1.1.0) (2025-05-09)
+
+
+### Bug Fixes
+
+* make cleaner code ([34e2c85](https://github.com/adlerre/mod_repudiator/commit/34e2c85a006fdb62e68517f096e6f8ed6668f2c5))
+* set mask also on error or if not found ([bbad26f](https://github.com/adlerre/mod_repudiator/commit/bbad26f256d922fbb26981b55483b42476143c3d))
+
+
+### Features
+
+* add fail2ban support ([bc50500](https://github.com/adlerre/mod_repudiator/commit/bc5050072bb5d63ec0c0da251e671a1092ef1ee2))
+
 ## [1.0.3](https://github.com/adlerre/mod_repudiator/compare/v1.0.2...v1.0.3) (2025-05-08)
 
 
