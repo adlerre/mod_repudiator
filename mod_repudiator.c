@@ -566,15 +566,17 @@ uint32_t lockupIPInfo(MMDB_s *mmdb, struct ip_node *node) {
                 asn = entry_data.uint32;
             }
             free(lookup_path);
-        } else {
-            if (node->family == AF_INET) {
-                node->mask.v4.s_addr = prefix2mask(32);
-            } else {
-                struct in6_addr m = node->ip.v6;
-                ipv6PrefixToMask(128, &m);
-                node->mask.v6 = m;
-            }
+
+            return asn;
         }
+    }
+
+    if (node->family == AF_INET) {
+        node->mask.v4.s_addr = prefix2mask(32);
+    } else {
+        struct in6_addr m = node->ip.v6;
+        ipv6PrefixToMask(128, &m);
+        node->mask.v6 = m;
     }
 
     return asn;
@@ -928,16 +930,18 @@ static int accessChecker(request_rec *r) {
 #ifdef REP_DEBUG
                      "%s/%s (%s) %s %s \"%s\" - %s (b:%4.2f (%4.2f %4.2f %4.2f)|ip:%4.2f (%lu)|net:%4.2f (%lu)|asn:%4.2f (%lu) %4.2f)",
 #else
-                         "%s/%s (%s) %s %s \"%s\" - %s (%4.2f)",
+                    "%s/%s (%s) %s %s \"%s\" - %s (%4.2f)",
 #endif
-                         ip, mask, asnStr, r->hostname, r->unparsed_uri, userAgent ? userAgent : "-",
-                         repState == REP_OK ? "OK" : repState == REP_WARN ? "WARN" : "BLOCK",
+                    ip, mask, asnStr, r->hostname, r->unparsed_uri, userAgent ? userAgent : "-",
+                    repState == REP_OK ? "OK" : repState == REP_WARN ? "WARN" : "BLOCK",
 #ifdef REP_DEBUG
                      basicRep, req->ipReputation / req->count, req->uaReputation / req->count,
                      req->uriReputation / req->count, perIPRep, req->count, perNetRep, nwCount,
                      perASNRep, asnCount,
 #endif
-                         reputation);
+                    reputation
+            )
+            ;
 
 #ifdef REP_DEBUG
         if (repState != REP_OK) {
