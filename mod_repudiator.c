@@ -926,22 +926,20 @@ static int accessChecker(request_rec *r) {
 
             snprintf(asnStr, sizeof(asnStr), "AS%d", asn);
 
-            ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
 #ifdef REP_DEBUG
+        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
                      "%s/%s (%s) %s %s \"%s\" - %s (b:%4.2f (%4.2f %4.2f %4.2f)|ip:%4.2f (%lu)|net:%4.2f (%lu)|asn:%4.2f (%lu) %4.2f)",
-#else
-                    "%s/%s (%s) %s %s \"%s\" - %s (%4.2f)",
-#endif
-                    ip, mask, asnStr, r->hostname, r->unparsed_uri, userAgent ? userAgent : "-",
-                    repState == REP_OK ? "OK" : repState == REP_WARN ? "WARN" : "BLOCK",
-#ifdef REP_DEBUG
-                     basicRep, req->ipReputation / req->count, req->uaReputation / req->count,
+                     ip, mask, asnStr, r->hostname, r->unparsed_uri, userAgent ? userAgent : "-",
+                     repState == REP_OK ? "OK" : repState == REP_WARN ? "WARN" : "BLOCK", basicRep,
+                     req->ipReputation / req->count, req->uaReputation / req->count,
                      req->uriReputation / req->count, perIPRep, req->count, perNetRep, nwCount,
-                     perASNRep, asnCount,
+                     perASNRep, asnCount, reputation);
+#else
+            ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
+                         "%s/%s (%s) %s %s \"%s\" - %s (%4.2f)",
+                         ip, mask, asnStr, r->hostname, r->unparsed_uri, userAgent ? userAgent : "-",
+                         repState == REP_OK ? "OK" : repState == REP_WARN ? "WARN" : "BLOCK", reputation);
 #endif
-                    reputation
-            )
-            ;
 
 #ifdef REP_DEBUG
         if (repState != REP_OK) {
