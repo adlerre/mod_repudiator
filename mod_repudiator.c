@@ -535,39 +535,38 @@ uint32_t lockupIPInfo(MMDB_s *mmdb, struct ip_node *node) {
     int mmdb_error = 0;
     int gai_error = 0;
 
-    if (mmdb == NULL)
-        return 0;
+    if (mmdb != NULL) {
+        char buf[128] = {0};
+        if (node->family == AF_INET) {
+            inet_ntop(AF_INET, &node->ip.v4, buf, sizeof(buf));
+        } else {
+            inet_ntop(AF_INET6, &node->ip.v6, buf, sizeof(buf));
+        }
 
-    char buf[128] = {0};
-    if (node->family == AF_INET) {
-        inet_ntop(AF_INET, &node->ip.v4, buf, sizeof(buf));
-    } else {
-        inet_ntop(AF_INET6, &node->ip.v6, buf, sizeof(buf));
-    }
+        MMDB_lookup_result_s lookup_result = MMDB_lookup_string(mmdb, buf, &gai_error, &mmdb_error);
+        if (mmdb_error == MMDB_SUCCESS) {
+            if (lookup_result.found_entry) {
+                if (node->family == AF_INET) {
+                    node->mask.v4.s_addr = prefix2mask(lookup_result.netmask);
+                } else {
+                    struct in6_addr m = node->ip.v6;
+                    ipv6PrefixToMask(lookup_result.netmask, &m);
+                    node->mask.v6 = m;
+                }
 
-    MMDB_lookup_result_s lookup_result = MMDB_lookup_string(mmdb, buf, &gai_error, &mmdb_error);
-    if (mmdb_error == MMDB_SUCCESS) {
-        if (lookup_result.found_entry) {
-            if (node->family == AF_INET) {
-                node->mask.v4.s_addr = prefix2mask(lookup_result.netmask);
-            } else {
-                struct in6_addr m = node->ip.v6;
-                ipv6PrefixToMask(lookup_result.netmask, &m);
-                node->mask.v6 = m;
+                MMDB_entry_data_s entry_data;
+
+                const char **lookup_path = calloc(1, sizeof(const char *));
+                lookup_path[0] = LP_ASN;
+
+                mmdb_error = MMDB_aget_value(&lookup_result.entry, &entry_data, lookup_path);
+                if (mmdb_error == MMDB_SUCCESS) {
+                    asn = entry_data.uint32;
+                }
+                free(lookup_path);
+
+                return asn;
             }
-
-            MMDB_entry_data_s entry_data;
-
-            const char **lookup_path = calloc(1, sizeof(const char *));
-            lookup_path[0] = LP_ASN;
-
-            mmdb_error = MMDB_aget_value(&lookup_result.entry, &entry_data, lookup_path);
-            if (mmdb_error == MMDB_SUCCESS) {
-                asn = entry_data.uint32;
-            }
-            free(lookup_path);
-
-            return asn;
         }
     }
 
