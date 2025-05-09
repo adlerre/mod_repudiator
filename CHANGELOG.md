@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/adlerre/mod_repudiator/compare/v1.2.0...v1.3.0) (2025-05-09)
+
+
+### Features
+
+* EVIL MODE ([4c877ae](https://github.com/adlerre/mod_repudiator/commit/4c877ae50d47f697a09bc17db9d9c647e284b2b8))
+
 # [1.2.0](https://github.com/adlerre/mod_repudiator/compare/v1.1.0...v1.2.0) (2025-05-09)
 
 
