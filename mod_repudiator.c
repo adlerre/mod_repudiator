@@ -44,6 +44,7 @@
 #include "http_log.h"
 #include "http_main.h"
 #include "http_request.h"
+#include "http_protocol.h"
 
 AP_DECLARE_MODULE(repudiator);
 
@@ -52,6 +53,11 @@ AP_DECLARE_MODULE(repudiator);
 #define REP_OK      0
 #define REP_WARN    1
 #define REP_BLOCK   2
+
+#define X_HEADER_REPUTATION         "X-Reputation"
+
+#define FIXUP_HEADERS_OUT_FILTER    "REP_FIXUP_HEADERS_OUT"
+#define FIXUP_HEADERS_ERR_FILTER    "REP_FIXUP_HEADERS_ERR"
 
 #define DEFAULT_WARN_REPUTATION     (-200.0)
 #define DEFAULT_BLOCK_REPUTATION    (-400.0)
@@ -140,6 +146,7 @@ struct req_node {
     double uaReputation;
     double uriReputation;
     double asnReputation;
+    double reputation;
 };
 
 struct req_vector {
@@ -893,9 +900,9 @@ static int accessChecker(request_rec *r) {
         const double perNetRep = calcReputation(cfg, req, 2);
         const double perASNRep = calcReputation(cfg, req, 3);
 
-        double reputation = basicRep + perIPRep + perNetRep + perASNRep;
+        req->reputation = basicRep + perIPRep + perNetRep + perASNRep;
 
-        const int repState = reputationState(cfg, reputation);
+        const int repState = reputationState(cfg, req->reputation);
 
 #ifdef REP_DEBUG
         long idx = findNetwork(&cfg->networks, &addr);
@@ -926,7 +933,7 @@ static int accessChecker(request_rec *r) {
             snprintf(asnStr, sizeof(asnStr), "AS%d", asn);
 
 #ifdef REP_DEBUG
-        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
+        ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, ap_server_conf,
                      "%s/%s (%s) %s %s \"%s\" - %s (b:%4.2f (%4.2f %4.2f %4.2f)|ip:%4.2f (%lu)|net:%4.2f (%lu)|asn:%4.2f (%lu) %4.2f)",
                      ip, mask, asnStr, r->hostname, r->unparsed_uri, userAgent ? userAgent : "-",
                      repState == REP_OK ? "OK" : repState == REP_WARN ? "WARN" : "BLOCK", basicRep,
@@ -934,10 +941,10 @@ static int accessChecker(request_rec *r) {
                      req->uriReputation / req->count, perIPRep, req->count, perNetRep, nwCount,
                      perASNRep, asnCount, reputation);
 #else
-            ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
+            ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, ap_server_conf,
                          "%s/%s (%s) %s %s \"%s\" - %s (%4.2f)",
                          ip, mask, asnStr, r->hostname, r->unparsed_uri, userAgent ? userAgent : "-",
-                         repState == REP_OK ? "OK" : repState == REP_WARN ? "WARN" : "BLOCK", reputation);
+                         repState == REP_OK ? "OK" : repState == REP_WARN ? "WARN" : "BLOCK", req->reputation);
 #endif
 
 #ifdef REP_DEBUG
@@ -948,6 +955,64 @@ static int accessChecker(request_rec *r) {
     }
 
     return ret;
+}
+
+int doHeaders(const repudiator_config *cfg, request_rec *r, apr_table_t *headers) {
+    if (cfg->enabled) {
+        struct ip_node addr;
+        if (convertAddress(getClientIp(r), &addr) == -1) {
+            ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "Couldn't parse ip address");
+            return DECLINED;
+        }
+
+        const long idx = findRequest(&cfg->requests, &addr);
+        if (idx != -1) {
+            const struct req_node *req = &cfg->requests.data[idx];
+
+            const int repState = reputationState(cfg, req->reputation);
+
+            char repStr[50] = {0};
+            snprintf(repStr, sizeof(repStr), "%s (%4.2f)",
+                     repState == REP_OK ? "OK" : repState == REP_WARN ? "WARN" : "BLOCK", req->reputation);
+
+            apr_table_setn(headers, X_HEADER_REPUTATION, strdup(repStr));
+        }
+    }
+
+    return OK;
+}
+
+
+static apr_status_t headersOutputFilter(ap_filter_t *f, apr_bucket_brigade *in) {
+    repudiator_config *cfg = (repudiator_config *) ap_get_module_config(f->r->per_dir_config, &repudiator_module);
+
+    doHeaders(cfg, f->r, f->r->headers_out);
+
+    ap_remove_output_filter(f);
+
+    return ap_pass_brigade(f->next, in);
+}
+
+static apr_status_t headersErrorFilter(ap_filter_t *f, apr_bucket_brigade *in) {
+    repudiator_config *cfg = (repudiator_config *) ap_get_module_config(f->r->per_dir_config, &repudiator_module);
+
+    doHeaders(cfg, f->r, f->r->err_headers_out);
+
+    ap_remove_output_filter(f);
+
+    return ap_pass_brigade(f->next, in);
+}
+
+static void headersInsertOutputFilter(request_rec *r) {
+    repudiator_config *cfg = (repudiator_config *) ap_get_module_config(r->per_dir_config, &repudiator_module);
+
+    ap_add_output_filter(FIXUP_HEADERS_OUT_FILTER, NULL, r, r->connection);
+}
+
+static void headersInsertErrorFilter(request_rec *r) {
+    repudiator_config *cfg = (repudiator_config *) ap_get_module_config(r->per_dir_config, &repudiator_module);
+
+    ap_add_output_filter(FIXUP_HEADERS_ERR_FILTER, NULL, r, r->connection);
 }
 
 static void destroyREVector(struct re_vector *vec) {
@@ -1259,7 +1324,13 @@ static const command_rec configCmds[] = {
 };
 
 static void registerHooks(apr_pool_t *p) {
+    ap_register_output_filter(FIXUP_HEADERS_OUT_FILTER, headersOutputFilter,NULL, AP_FTYPE_CONTENT_SET);
+    ap_register_output_filter(FIXUP_HEADERS_ERR_FILTER, headersErrorFilter,NULL, AP_FTYPE_CONTENT_SET);
+
+    ap_hook_insert_filter(headersInsertOutputFilter, NULL, NULL, APR_HOOK_LAST);
+    ap_hook_insert_error_filter(headersInsertErrorFilter, NULL, NULL, APR_HOOK_LAST);
     ap_hook_access_checker(accessChecker, NULL, NULL, APR_HOOK_FIRST - 5);
+
     apr_pool_cleanup_register(p, NULL, apr_pool_cleanup_null, destroyConfig);
 };
 
