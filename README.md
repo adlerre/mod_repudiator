@@ -42,6 +42,11 @@ apxs -c -DPCRE2 -DREP_DEBUG -lmaxminddb -lpcre2-8 mod_repudiator.c
 
   Enable module
 
+* **RepudiatorEvilModeEnabled**<br />
+  *Default:* `false`
+
+  Let's get mad!
+
 * **RepudiatorWarnReputation**<br />
   *Default:* `-200`
 
