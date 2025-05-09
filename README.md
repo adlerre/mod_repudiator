@@ -113,3 +113,25 @@ apxs -c -DPCRE2 -DREP_DEBUG -lmaxminddb -lpcre2-8 mod_repudiator.c
   Set ASN-based reputation, first part is ASN and second (after |) is reputation score.<br />
   *Example:*<br />
   `RepudiatorASNReputation 15169|100.0`
+
+## Let's ban these bad guys
+
+Install __fail2ban__ and add custom jail.
+
+```bash
+cp fail2ban/filter.d/apache-mod_repudiator.conf /etc/fail2ban/filter.d/
+
+cat >> /etc/fail2ban/jail.local << EOF
+[apache-mod_repudiator]
+enabled = true
+backend = polling
+port    = http,https
+filter  = apache-mod_repudiator
+logpath = /var/log/httpd/error_log
+maxretry = 1
+findtime = 120
+bantime  = 600
+EOF
+
+systemctl restart fail2ban
+```
