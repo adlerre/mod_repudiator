@@ -114,6 +114,13 @@ apxs -c -DPCRE2 -DREP_DEBUG -lmaxminddb -lpcre2-8 mod_repudiator.c
   *Example:*<br />
   `RepudiatorASNReputation 15169|100.0`
 
+* **RepudiatorRCReputation**<br />
+  *iterable*
+  
+  Set HTTP-Return-Code-based reputaion, first part status code (after |) is reputation score.<br />
+  *Example:*<br />
+  `RepudiatorRCReputation 404|-1.0`
+
 ## Let's ban these bad guys
 
 Install __fail2ban__ and add custom jail.
