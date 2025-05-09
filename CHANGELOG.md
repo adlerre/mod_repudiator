@@ -1,3 +1,16 @@
+# [1.2.0](https://github.com/adlerre/mod_repudiator/compare/v1.1.0...v1.2.0) (2025-05-09)
+
+
+### Bug Fixes
+
+* fixing set of netmask if ASN DB isn't configured ([29dd724](https://github.com/adlerre/mod_repudiator/commit/29dd7247f5aaed46d8fed4b9ffee10f7cbfe826f))
+
+
+### Features
+
+* add RC-based reputation scoring ([4ce463d](https://github.com/adlerre/mod_repudiator/commit/4ce463d5f15366f86550688d986b51bb05efe098))
+* add X-Reputation header ([8c08aac](https://github.com/adlerre/mod_repudiator/commit/8c08aac661b756fa7020d0921e4d5a26feebbb45))
+
 # [1.1.0](https://github.com/adlerre/mod_repudiator/compare/v1.0.3...v1.1.0) (2025-05-09)
 
 
