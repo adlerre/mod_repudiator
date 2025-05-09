@@ -167,6 +167,7 @@ struct req_vector {
 
 typedef struct {
     int enabled;
+    int evilMode;
     char *asnDBPath;
     struct ip_vector ipReputation;
     struct re_vector uaReputation;
@@ -1022,6 +1023,13 @@ static int accessChecker(request_rec *r) {
 #ifdef REP_DEBUG
         if (repState != REP_OK) {
 #endif
+            if (cfg->evilMode == 1 && repState == REP_BLOCK) {
+                char location[4096] = {0};
+                snprintf(location, sizeof(location), req->addr.family == AF_INET ? "http://%s" : "http://[%s]", ip);
+                apr_table_setn(r->headers_out, "Location", location);
+                return HTTP_MOVED_TEMPORARILY;
+            }
+
             return repState == REP_WARN ? cfg->warnHttpReply : cfg->blockHttpReply;
         }
     }
@@ -1096,14 +1104,10 @@ static apr_status_t headersErrorFilter(ap_filter_t *f, apr_bucket_brigade *in) {
 }
 
 static void headersInsertOutputFilter(request_rec *r) {
-    repudiator_config *cfg = (repudiator_config *) ap_get_module_config(r->per_dir_config, &repudiator_module);
-
     ap_add_output_filter(FIXUP_HEADERS_OUT_FILTER, NULL, r, r->connection);
 }
 
 static void headersInsertErrorFilter(request_rec *r) {
-    repudiator_config *cfg = (repudiator_config *) ap_get_module_config(r->per_dir_config, &repudiator_module);
-
     ap_add_output_filter(FIXUP_HEADERS_ERR_FILTER, NULL, r, r->connection);
 }
 
@@ -1144,6 +1148,22 @@ static const char *setEnabled(__attribute__((unused)) cmd_parms *cmd, void *dcon
         ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
                      "Invalid RepudiatorEnabled value '%s', mod_repudiator disabled.", value);
         cfg->enabled = 0;
+    }
+
+    return NULL;
+}
+
+static const char *setEvilModeEnabled(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
+    repudiator_config *cfg = (repudiator_config *) dconfig;
+
+    if (strcmp("true", value) == 0) {
+        cfg->evilMode = 1;
+    } else if (strcmp("false", value) == 0) {
+        cfg->evilMode = 0;
+    } else {
+        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
+                     "Invalid RepudiatorEvilModeEnabled value '%s'", value);
+        cfg->evilMode = 0;
     }
 
     return NULL;
@@ -1404,6 +1424,9 @@ static const char *setBlocHttpReply(__attribute__((unused)) cmd_parms *cmd, void
 static const command_rec configCmds[] = {
     AP_INIT_TAKE1("RepudiatorEnabled", setEnabled, NULL, RSRC_CONF,
                   "Enable mod_repudiator (either globally or in the virtualhost where it is specified)"),
+
+    AP_INIT_TAKE1("RepudiatorEvilModeEnabled", setEvilModeEnabled, NULL, RSRC_CONF,
+                  "Enable evil mode - let's get mad"),
 
     AP_INIT_TAKE1("RepudiatorASNDatabase", setASNDatabase, NULL, RSRC_CONF, "Set path to Maxmind ASN database"),
 
