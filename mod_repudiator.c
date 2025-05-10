@@ -1024,6 +1024,29 @@ static int accessChecker(request_rec *r) {
         if (repState != REP_OK) {
 #endif
             if (cfg->evilMode == 1 && repState == REP_BLOCK) {
+                // send traffic to a random bad guy
+                if (cfg->requests.size > 1) {
+                    struct req_node *rreq;
+                    size_t ec = 0;
+                    do {
+                        const size_t ridx = rand() % (cfg->requests.size + 1);
+                        rreq = &cfg->requests.data[ridx];
+                        ec++;
+                    } while (rreq->reputation < cfg->blockReputation && ec < 10);
+
+                    if (rreq->reputation > cfg->blockReputation) {
+                        req = rreq;
+                    }
+
+                    if (req->addr.family == AF_INET) {
+                        inet_ntop(AF_INET, &req->addr.ip.v4, ip, sizeof(ip));
+                        inet_ntop(AF_INET, &req->addr.mask.v4, mask, sizeof(mask));
+                    } else {
+                        inet_ntop(AF_INET6, &req->addr.ip.v6, ip, sizeof(ip));
+                        inet_ntop(AF_INET6, &req->addr.mask.v6, mask, sizeof(mask));
+                    }
+                }
+
                 char location[4096] = {0};
                 snprintf(location, sizeof(location), req->addr.family == AF_INET ? "http://%s" : "http://[%s]", ip);
                 apr_table_setn(r->headers_out, "Location", location);
