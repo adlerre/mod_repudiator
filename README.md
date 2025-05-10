@@ -47,6 +47,11 @@ apxs -c -DPCRE2 -DREP_DEBUG -lmaxminddb -lpcre2-8 mod_repudiator.c
 
   Let's get mad!
 
+* **RepudiatorEvilRedirectURL**<br />
+  *Default:* `NULL`
+
+  Redirect the bad boy to this URL
+
 * **RepudiatorWarnReputation**<br />
   *Default:* `-200`
 
