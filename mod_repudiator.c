@@ -168,6 +168,7 @@ struct req_vector {
 typedef struct {
     int enabled;
     int evilMode;
+    char *evilRedirectURL;
     char *asnDBPath;
     struct ip_vector ipReputation;
     struct re_vector uaReputation;
@@ -204,6 +205,11 @@ static void *reallocArray(void *ptr, const size_t nmemb, const size_t size) {
     }
 
     return realloc(ptr, nmemb * size);
+}
+
+static int startsWith(const char *str, const char *prefix) {
+    while (*prefix && *str == *prefix) ++str, ++prefix;
+    return *prefix == 0;
 }
 
 static uint32_t prefix2mask(int prefix) {
@@ -1024,31 +1030,37 @@ static int accessChecker(request_rec *r) {
         if (repState != REP_OK) {
 #endif
             if (cfg->evilMode == 1 && repState == REP_BLOCK) {
-                // send traffic to a random bad guy
-                if (cfg->requests.size > 1) {
-                    struct req_node *rreq;
-                    size_t ec = 0;
-                    do {
-                        const size_t ridx = rand() % (cfg->requests.size + 1);
-                        rreq = &cfg->requests.data[ridx];
-                        ec++;
-                    } while (rreq->reputation < cfg->blockReputation && ec < 10);
+                char location[4096] = {0};
 
-                    if (rreq->reputation > cfg->blockReputation) {
-                        req = rreq;
+                if (cfg->evilRedirectURL != NULL) {
+                    snprintf(location, sizeof(location), "%s", cfg->evilRedirectURL);
+                } else {
+                    // send traffic to a random bad guy
+                    if (cfg->requests.size > 1) {
+                        struct req_node *rreq;
+                        size_t ec = 0;
+                        do {
+                            const size_t ridx = rand() % (cfg->requests.size + 1);
+                            rreq = &cfg->requests.data[ridx];
+                            ec++;
+                        } while (rreq->reputation < cfg->blockReputation && ec < 10);
+
+                        if (rreq->reputation > cfg->blockReputation) {
+                            req = rreq;
+                        }
+
+                        if (req->addr.family == AF_INET) {
+                            inet_ntop(AF_INET, &req->addr.ip.v4, ip, sizeof(ip));
+                            inet_ntop(AF_INET, &req->addr.mask.v4, mask, sizeof(mask));
+                        } else {
+                            inet_ntop(AF_INET6, &req->addr.ip.v6, ip, sizeof(ip));
+                            inet_ntop(AF_INET6, &req->addr.mask.v6, mask, sizeof(mask));
+                        }
                     }
 
-                    if (req->addr.family == AF_INET) {
-                        inet_ntop(AF_INET, &req->addr.ip.v4, ip, sizeof(ip));
-                        inet_ntop(AF_INET, &req->addr.mask.v4, mask, sizeof(mask));
-                    } else {
-                        inet_ntop(AF_INET6, &req->addr.ip.v6, ip, sizeof(ip));
-                        inet_ntop(AF_INET6, &req->addr.mask.v6, mask, sizeof(mask));
-                    }
+                    snprintf(location, sizeof(location), req->addr.family == AF_INET ? "http://%s" : "http://[%s]", ip);
                 }
 
-                char location[4096] = {0};
-                snprintf(location, sizeof(location), req->addr.family == AF_INET ? "http://%s" : "http://[%s]", ip);
                 apr_table_setn(r->headers_out, "Location", location);
                 return HTTP_MOVED_TEMPORARILY;
             }
@@ -1187,6 +1199,20 @@ static const char *setEvilModeEnabled(__attribute__((unused)) cmd_parms *cmd, vo
         ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
                      "Invalid RepudiatorEvilModeEnabled value '%s'", value);
         cfg->evilMode = 0;
+    }
+
+    return NULL;
+}
+
+static const char *setEvilRedirectURL(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
+    repudiator_config *cfg = (repudiator_config *) dconfig;
+
+    if (startsWith(value, "http") == 1 || startsWith(value, "/") == 1) {
+        cfg->evilRedirectURL = strdup(value);
+    } else {
+        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
+                     "Invalid RepudiatorEvilRedirectURL value '%s'", value);
+        cfg->evilRedirectURL = NULL;
     }
 
     return NULL;
@@ -1450,6 +1476,8 @@ static const command_rec configCmds[] = {
 
     AP_INIT_TAKE1("RepudiatorEvilModeEnabled", setEvilModeEnabled, NULL, RSRC_CONF,
                   "Enable evil mode - let's get mad"),
+
+    AP_INIT_TAKE1("RepudiatorEvilRedirectURL", setEvilRedirectURL, NULL, RSRC_CONF, "Set evil redirect URL"),
 
     AP_INIT_TAKE1("RepudiatorASNDatabase", setASNDatabase, NULL, RSRC_CONF, "Set path to Maxmind ASN database"),
 
