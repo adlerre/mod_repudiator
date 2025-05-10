@@ -1160,6 +1160,7 @@ static void destroyREVector(struct re_vector *vec) {
 static apr_status_t destroyConfig(void *dconfig) {
     repudiator_config *cfg = (repudiator_config *) dconfig;
     if (cfg != NULL) {
+        free(cfg->evilRedirectURL);
         free(cfg->ipReputation.data);
         destroyREVector(&cfg->uaReputation);
         destroyREVector(&cfg->uriReputation);
