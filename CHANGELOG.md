@@ -1,3 +1,10 @@
+## [1.3.1](https://github.com/adlerre/mod_repudiator/compare/v1.3.0...v1.3.1) (2025-05-10)
+
+
+### Bug Fixes
+
+* randomize redirect ([e393e69](https://github.com/adlerre/mod_repudiator/commit/e393e69b4e944cc20f01ce7ae96c4ca655560f84))
+
 # [1.3.0](https://github.com/adlerre/mod_repudiator/compare/v1.2.0...v1.3.0) (2025-05-09)
 
 
