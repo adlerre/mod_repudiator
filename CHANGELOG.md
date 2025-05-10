@@ -1,3 +1,15 @@
+# [1.4.0](https://github.com/adlerre/mod_repudiator/compare/v1.3.1...v1.4.0) (2025-05-10)
+
+
+### Bug Fixes
+
+* add some more URI examples ([f7f1456](https://github.com/adlerre/mod_repudiator/commit/f7f145663b4f34a030a778e91febb019b5081424))
+
+
+### Features
+
+* add evil redirect URL ([f52d1d4](https://github.com/adlerre/mod_repudiator/commit/f52d1d411608db67a2a1457d92c32a8e42fe3cee))
+
 ## [1.3.1](https://github.com/adlerre/mod_repudiator/compare/v1.3.0...v1.3.1) (2025-05-10)
 
 
