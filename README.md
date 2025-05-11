@@ -2,7 +2,7 @@
 
 ## Requirements
 
-Installed headers for __apache2__, __libmaxminddb__ and optional for __pcre2__. 
+Installed headers for __apache2__, __libmaxminddb__ and optional for __pcre2__.
 Download the ASN database with __geoipupdate__.
 
 RHEL based
@@ -51,6 +51,11 @@ apxs -c -DPCRE2 -DREP_DEBUG -lmaxminddb -lpcre2-8 mod_repudiator.c
   *Default:* `NULL`
 
   Redirect the bad boy to this URL
+
+* **RepudiatorEvilDelay**<br />
+  *Default:* `0`
+
+  Number of milliseconds to delay before sending the response.
 
 * **RepudiatorWarnReputation**<br />
   *Default:* `-200`
@@ -126,7 +131,7 @@ apxs -c -DPCRE2 -DREP_DEBUG -lmaxminddb -lpcre2-8 mod_repudiator.c
 
 * **RepudiatorStatusReputation**<br />
   *iterable*
-  
+
   Set HTTP-Status-based reputation, first part status code (after |) is reputation score.<br />
   *Example:*<br />
   `RepudiatorStatusReputation 404|-1.0`
