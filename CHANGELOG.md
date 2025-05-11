@@ -1,3 +1,15 @@
+# [1.5.0](https://github.com/adlerre/mod_repudiator/compare/v1.4.1...v1.5.0) (2025-05-11)
+
+
+### Bug Fixes
+
+* rename to what it is and fix handling ([df25485](https://github.com/adlerre/mod_repudiator/commit/df254856481d4233e91a1a9ab4451062da1a9d6c))
+
+
+### Features
+
+* add delay feature for evil mode ([10bca72](https://github.com/adlerre/mod_repudiator/commit/10bca72ad3b3e4827a25e7df55c70f6b974b0005))
+
 ## [1.4.1](https://github.com/adlerre/mod_repudiator/compare/v1.4.0...v1.4.1) (2025-05-10)
 
 
