@@ -124,12 +124,12 @@ apxs -c -DPCRE2 -DREP_DEBUG -lmaxminddb -lpcre2-8 mod_repudiator.c
   *Example:*<br />
   `RepudiatorASNReputation 15169|100.0`
 
-* **RepudiatorRCReputation**<br />
+* **RepudiatorStatusReputation**<br />
   *iterable*
   
-  Set HTTP-Return-Code-based reputaion, first part status code (after |) is reputation score.<br />
+  Set HTTP-Status-based reputation, first part status code (after |) is reputation score.<br />
   *Example:*<br />
-  `RepudiatorRCReputation 404|-1.0`
+  `RepudiatorStatusReputation 404|-1.0`
 
 ## Let's ban these bad guys
 
