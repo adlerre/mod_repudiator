@@ -59,6 +59,7 @@ AP_DECLARE_MODULE(repudiator);
 #define FIXUP_HEADERS_OUT_FILTER    "REP_FIXUP_HEADERS_OUT"
 #define FIXUP_HEADERS_ERR_FILTER    "REP_FIXUP_HEADERS_ERR"
 
+#define DEFAULT_EVIL_DELAY          -1
 #define DEFAULT_WARN_REPUTATION     (-200.0)
 #define DEFAULT_BLOCK_REPUTATION    (-400.0)
 #define DEFAULT_PER_IP_REPUTATION   (-0.033)
@@ -169,6 +170,7 @@ typedef struct {
     int enabled;
     int evilMode;
     char *evilRedirectURL;
+    long evilDelay;
     char *asnDBPath;
     struct ip_vector ipReputation;
     struct re_vector uaReputation;
@@ -205,6 +207,11 @@ static void *reallocArray(void *ptr, const size_t nmemb, const size_t size) {
     }
 
     return realloc(ptr, nmemb * size);
+}
+
+static void delay(const long millis) {
+    const clock_t start = clock();
+    while (clock() < start + CLOCKS_PER_SEC / 1000 * millis);
 }
 
 static int startsWith(const char *str, const char *prefix) {
@@ -1062,6 +1069,10 @@ static int accessChecker(request_rec *r) {
                     snprintf(location, sizeof(location), req->addr.family == AF_INET ? "http://%s" : "http://[%s]", ip);
                 }
 
+                if (cfg->evilDelay > 0) {
+                    delay(cfg->evilDelay);
+                }
+
                 apr_table_setn(r->headers_out, "Location", location);
                 return HTTP_MOVED_TEMPORARILY;
             }
@@ -1216,6 +1227,25 @@ static const char *setEvilRedirectURL(__attribute__((unused)) cmd_parms *cmd, vo
         ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
                      "Invalid RepudiatorEvilRedirectURL value '%s'", value);
         cfg->evilRedirectURL = NULL;
+    }
+
+    return NULL;
+}
+
+static const char *setEvilDelay(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
+    repudiator_config *cfg = (repudiator_config *) dconfig;
+    char *endptr;
+    long n;
+
+    errno = 0;
+    n = strtol(value, &endptr, 0);
+    if (errno || *endptr != '\0') {
+        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
+                     "Invalid RepudiatorEvilDelay value '%s', using default %d.",
+                     value, DEFAULT_SCAN_TIME);
+        cfg->evilDelay = DEFAULT_EVIL_DELAY;
+    } else {
+        cfg->evilDelay = n;
     }
 
     return NULL;
@@ -1481,6 +1511,8 @@ static const command_rec configCmds[] = {
                   "Enable evil mode - let's get mad"),
 
     AP_INIT_TAKE1("RepudiatorEvilRedirectURL", setEvilRedirectURL, NULL, RSRC_CONF, "Set evil redirect URL"),
+
+    AP_INIT_TAKE1("RepudiatorEvilDelay", setEvilDelay, NULL, RSRC_CONF, "Set evil delay in milliseconds"),
 
     AP_INIT_TAKE1("RepudiatorASNDatabase", setASNDatabase, NULL, RSRC_CONF, "Set path to Maxmind ASN database"),
 
