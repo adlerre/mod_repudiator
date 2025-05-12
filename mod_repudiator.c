@@ -1102,7 +1102,11 @@ int doHeaders(const repudiator_config *cfg, request_rec *r, apr_table_t *headers
             snprintf(repStr, sizeof(repStr), "%s (%4.2f)",
                      repState == REP_OK ? "OK" : repState == REP_WARN ? "WARN" : "BLOCK", req->reputation);
 
-            apr_table_setn(headers, X_HEADER_REPUTATION, strdup(repStr));
+            if (apr_table_get(headers, X_HEADER_REPUTATION) != NULL) {
+                apr_table_unset(headers, X_HEADER_REPUTATION);
+            }
+
+            apr_table_add(headers, X_HEADER_REPUTATION, strdup(repStr));
         }
     }
 
