@@ -1,3 +1,10 @@
+## [1.5.1](https://github.com/adlerre/mod_repudiator/compare/v1.5.0...v1.5.1) (2025-05-12)
+
+
+### Bug Fixes
+
+* unset reputation header to prevent merging ([ff37bd2](https://github.com/adlerre/mod_repudiator/commit/ff37bd20006c2e2ec15f4473c6be0e42348de924))
+
 # [1.5.0](https://github.com/adlerre/mod_repudiator/compare/v1.4.1...v1.5.0) (2025-05-11)
 
 
