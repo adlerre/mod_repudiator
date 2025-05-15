@@ -52,6 +52,11 @@ apxs -c -DPCRE2 -DREP_DEBUG -lmaxminddb -lpcre2-8 mod_repudiator.c
 
   Redirect the bad boy to this URL
 
+* **RepudiatorEvilAppendURI**<br />
+  *Default:* `0`
+
+  Append raw URI to redirect URL
+  
 * **RepudiatorEvilDelay**<br />
   *Default:* `0`
 

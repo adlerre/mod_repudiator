@@ -170,6 +170,7 @@ typedef struct {
     int enabled;
     int evilMode;
     char *evilRedirectURL;
+    int evilAppendURI;
     long evilDelay;
     char *asnDBPath;
     struct ip_vector ipReputation;
@@ -1041,7 +1042,11 @@ static int accessChecker(request_rec *r) {
                 char location[4096] = {0};
 
                 if (cfg->evilRedirectURL != NULL) {
-                    snprintf(location, sizeof(location), "%s", cfg->evilRedirectURL);
+                    if (cfg->evilAppendURI == 1) {
+                        snprintf(location, sizeof(location), "%s%s", cfg->evilRedirectURL, r->unparsed_uri);
+                    } else {
+                        snprintf(location, sizeof(location), "%s", cfg->evilRedirectURL);
+                    }
                 } else {
                     // send traffic to a random bad guy
                     if (cfg->requests.size > 1) {
@@ -1231,6 +1236,22 @@ static const char *setEvilRedirectURL(__attribute__((unused)) cmd_parms *cmd, vo
         ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
                      "Invalid RepudiatorEvilRedirectURL value '%s'", value);
         cfg->evilRedirectURL = NULL;
+    }
+
+    return NULL;
+}
+
+static const char *setEvilAppendURI(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
+    repudiator_config *cfg = (repudiator_config *) dconfig;
+
+    if (strcmp("true", value) == 0) {
+        cfg->evilAppendURI = 1;
+    } else if (strcmp("false", value) == 0) {
+        cfg->evilAppendURI = 0;
+    } else {
+        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
+                     "Invalid RepudiatorEvilAppendURI value '%s'", value);
+        cfg->evilAppendURI = 0;
     }
 
     return NULL;
@@ -1515,6 +1536,8 @@ static const command_rec configCmds[] = {
                   "Enable evil mode - let's get mad"),
 
     AP_INIT_TAKE1("RepudiatorEvilRedirectURL", setEvilRedirectURL, NULL, RSRC_CONF, "Set evil redirect URL"),
+
+    AP_INIT_TAKE1("RepudiatorEvilAppendURI", setEvilAppendURI, NULL, RSRC_CONF, "Enable URI append to redirectURL"),
 
     AP_INIT_TAKE1("RepudiatorEvilDelay", setEvilDelay, NULL, RSRC_CONF, "Set evil delay in milliseconds"),
 
