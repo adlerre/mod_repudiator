@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/adlerre/mod_repudiator/compare/v1.5.1...v1.6.0) (2025-05-15)
+
+
+### Features
+
+* option to append raw URI to redirect URL ([a54a5ee](https://github.com/adlerre/mod_repudiator/commit/a54a5eee2880951985f62f74a21c1a5149f5d297))
+
 ## [1.5.1](https://github.com/adlerre/mod_repudiator/compare/v1.5.0...v1.5.1) (2025-05-12)
 
 
