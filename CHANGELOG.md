@@ -1,3 +1,10 @@
+## [1.7.1](https://github.com/adlerre/mod_repudiator/compare/v1.7.0...v1.7.1) (2025-05-17)
+
+
+### Bug Fixes
+
+* it was too much ([f25d2cb](https://github.com/adlerre/mod_repudiator/commit/f25d2cb603d0777ff11ecc19251d4c1a4dab8165))
+
 # [1.7.0](https://github.com/adlerre/mod_repudiator/compare/v1.6.0...v1.7.0) (2025-05-17)
 
 
