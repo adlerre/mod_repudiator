@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/adlerre/mod_repudiator/compare/v1.6.0...v1.7.0) (2025-05-17)
+
+
+### Features
+
+* add more bad user-agents ([00f7680](https://github.com/adlerre/mod_repudiator/commit/00f7680268c4708123601133d2bf9247122cecc3))
+
 # [1.6.0](https://github.com/adlerre/mod_repudiator/compare/v1.5.1...v1.6.0) (2025-05-15)
 
 
