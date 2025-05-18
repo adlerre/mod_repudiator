@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/adlerre/mod_repudiator/compare/v1.7.1...v1.8.0) (2025-05-18)
+
+
+### Features
+
+* output version on startup ([#8](https://github.com/adlerre/mod_repudiator/issues/8)) ([645424c](https://github.com/adlerre/mod_repudiator/commit/645424ce8b24347145ed33805e2380aaf76f2386))
+
 ## [1.7.1](https://github.com/adlerre/mod_repudiator/compare/v1.7.0...v1.7.1) (2025-05-17)
 
 
