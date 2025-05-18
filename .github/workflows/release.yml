@@ -46,11 +46,11 @@ jobs:
 
       - if: ${{ matrix.build == 'regex' }}
         name: Build module
-        run: apxs -c -lmaxminddb mod_repudiator.c
+        run: apxs -c -DREP_VERSION="${{ needs.semantic-release.outputs.new_release_version }}" -lmaxminddb mod_repudiator.c
 
       - if: ${{ matrix.build == 'pcre2' }}
         name: Build module
-        run: apxs -c -DPCRE2 -lmaxminddb -lpcre2-8 mod_repudiator.c
+        run: apxs -c -DPCRE2 -DREP_VERSION="${{ needs.semantic-release.outputs.new_release_version }}" -lmaxminddb -lpcre2-8 mod_repudiator.c
 
       - name: Update generated-files cache on every commit
         uses: actions/cache@v4
@@ -89,11 +89,11 @@ jobs:
 
       - if: ${{ matrix.build == 'regex' }}
         name: Build module
-        run: apxs -c -lmaxminddb mod_repudiator.c
+        run: apxs -c -DREP_VERSION="${{ needs.semantic-release.outputs.new_release_version }}" -lmaxminddb mod_repudiator.c
 
       - if: ${{ matrix.build == 'pcre2' }}
         name: Build module
-        run: apxs -c -DPCRE2 -lmaxminddb -lpcre2-8 mod_repudiator.c
+        run: apxs -c -DPCRE2 -DREP_VERSION="${{ needs.semantic-release.outputs.new_release_version }}" -lmaxminddb -lpcre2-8 mod_repudiator.c
 
       - name: Update generated-files cache on every commit
         uses: actions/cache@v4

@@ -48,7 +48,14 @@
 
 AP_DECLARE_MODULE(repudiator);
 
-#define LP_ASN      "autonomous_system_number"
+#define _STR(x) #x
+#define STR(x) _STR(x)
+
+#ifndef REP_VERSION
+#define REP_VERSION                 "dev"
+#endif
+
+#define LP_ASN                      "autonomous_system_number"
 
 #define REP_OK      0
 #define REP_WARN    1
@@ -59,7 +66,7 @@ AP_DECLARE_MODULE(repudiator);
 #define FIXUP_HEADERS_OUT_FILTER    "REP_FIXUP_HEADERS_OUT"
 #define FIXUP_HEADERS_ERR_FILTER    "REP_FIXUP_HEADERS_ERR"
 
-#define DEFAULT_EVIL_DELAY          -1
+#define DEFAULT_EVIL_DELAY          (-1)
 #define DEFAULT_WARN_REPUTATION     (-200.0)
 #define DEFAULT_BLOCK_REPUTATION    (-400.0)
 #define DEFAULT_PER_IP_REPUTATION   (-0.033)
@@ -1089,6 +1096,28 @@ static int accessChecker(request_rec *r) {
     return ret;
 }
 
+static int preConfig(apr_pool_t *mp, apr_pool_t *mp_log, apr_pool_t *mp_temp) {
+    void *data = NULL;
+    const char *key = "repudiator-pre-config-init-flag";
+    int first_time = 0;
+
+    apr_pool_userdata_get(&data, key, mp);
+    if (data == NULL) {
+        apr_pool_userdata_set((const void *) 1, key,
+                              apr_pool_cleanup_null, mp);
+        first_time = 1;
+    }
+
+    if (!first_time) {
+        return OK;
+    }
+
+    ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, ap_server_conf, "ModRepudiator version %s",
+                 STR(REP_VERSION));
+
+    return OK;
+}
+
 int doHeaders(const repudiator_config *cfg, request_rec *r, apr_table_t *headers) {
     if (cfg->enabled) {
         struct ip_node addr;
@@ -1573,6 +1602,8 @@ static const command_rec configCmds[] = {
 };
 
 static void registerHooks(apr_pool_t *p) {
+    ap_hook_pre_config(preConfig, NULL, NULL, APR_HOOK_FIRST);
+
     ap_register_output_filter(FIXUP_HEADERS_OUT_FILTER, headersOutputFilter,NULL, AP_FTYPE_CONTENT_SET);
     ap_register_output_filter(FIXUP_HEADERS_ERR_FILTER, headersErrorFilter,NULL, AP_FTYPE_CONTENT_SET);
 
