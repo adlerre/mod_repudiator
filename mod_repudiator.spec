@@ -21,7 +21,7 @@ Requires:       httpd-mmn = %([ -a %{_includedir}/httpd/.mmn ] && cat %{_include
 Reputation-based limiting/blocking of malicious clients for Apache
 
 %build
-apxs -c -DPCRE2 -lmaxminddb -lpcre2-8 -Wc,"%{optflags}" %{SOURCE0}
+apxs -c -DPCRE2 -DREP_VERSION="%{version}" -lmaxminddb -lpcre2-8 -Wc,"%{optflags}" %{SOURCE0}
 
 
 %install
