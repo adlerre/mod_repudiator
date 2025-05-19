@@ -1,3 +1,10 @@
+## [1.8.1](https://github.com/adlerre/mod_repudiator/compare/v1.8.0...v1.8.1) (2025-05-19)
+
+
+### Bug Fixes
+
+* fixing segmentation fault ([2d187c6](https://github.com/adlerre/mod_repudiator/commit/2d187c6977a71634cd16592b2944feec49cb04e5))
+
 # [1.8.0](https://github.com/adlerre/mod_repudiator/compare/v1.7.1...v1.8.0) (2025-05-18)
 
 
