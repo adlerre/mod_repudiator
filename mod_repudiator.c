@@ -301,7 +301,7 @@ static int convertAddress(const char *addr, struct ip_node *ipNode) {
     return rc;
 }
 
-static int parseIPReputation(struct ip_vector *ipReputation, const char *line) {
+static int parseIPReputation(struct ip_vector *ipReputation, const char *ipm, const char *rep) {
     int rc = 0;
     int pos = 0;
     int m = 0;
@@ -309,14 +309,13 @@ static int parseIPReputation(struct ip_vector *ipReputation, const char *line) {
     char family = AF_INET;
     char addr[128] = {0};
     char mask[128] = {0};
-    char rep[32] = {0};
 
-    for (size_t i = 0; i < strlen(line); i++) {
-        if (line[i] == ':') {
+    for (size_t i = 0; i < strlen(ipm); i++) {
+        if (ipm[i] == ':') {
             family = AF_INET6;
         }
-        if (line[i] != '|') {
-            if (line[i] == '/') {
+        if (ipm[i] != '|') {
+            if (ipm[i] == '/') {
                 addr[pos] = '\0';
                 pos = 0;
                 m = 1;
@@ -324,9 +323,9 @@ static int parseIPReputation(struct ip_vector *ipReputation, const char *line) {
             }
 
             if (m == 0) {
-                addr[pos] = line[i];
+                addr[pos] = ipm[i];
             } else {
-                mask[pos] = line[i];
+                mask[pos] = ipm[i];
             }
             ++pos;
             ++n;
@@ -338,15 +337,6 @@ static int parseIPReputation(struct ip_vector *ipReputation, const char *line) {
     if (m == 1) {
         mask[pos] = '\0';
     }
-
-    pos = 0;
-    for (size_t i = n + 2; i < strlen(line); i++) {
-        if (line[i] != '\0') {
-            rep[pos] = line[i];
-            ++pos;
-        }
-    }
-    rep[pos] = '\0';
 
     int prefix = (int) strtol(mask, NULL, 10);
     struct in_addr ipv4, mv4 = {};
@@ -392,31 +382,10 @@ static int parseIPReputation(struct ip_vector *ipReputation, const char *line) {
     return rc;
 }
 
-static int parseRegexReputation(struct re_vector *reVector, const char *value) {
+static int parseRegexReputation(struct re_vector *reVector, const char *regex, const char *rep) {
     int rc = 0;
-    int pos = 0;
-    char regex[8192] = {0};
-    char rep[32] = {0};
 
-    if (value[0] == '/') {
-        for (size_t i = 1; i < strlen(value); i++) {
-            if (value[i] == '/' && value[i + 1] == '|') {
-                break;
-            }
-            regex[pos] = value[i];
-            ++pos;
-        }
-    }
-    regex[pos] = '\0';
-
-    pos = 0;
-    for (size_t i = strlen(regex) + 3; i < strlen(value); i++) {
-        rep[pos] = value[i];
-        ++pos;
-    }
-    rep[pos] = '\0';
-
-    if (regex[0] != '\0' && rep[0] != '\0') {
+    if (strlen(regex) != 0 && strlen(rep) != 0) {
 #ifdef PCRE2
         int errornumber;
         PCRE2_SIZE erroroffset;
@@ -468,28 +437,8 @@ static int parseRegexReputation(struct re_vector *reVector, const char *value) {
     return rc;
 }
 
-static int parseASNReputation(struct asn_vector *asnVector, const char *value) {
+static int parseASNReputation(struct asn_vector *asnVector, const char *asn, const char *rep) {
     int rc = 0;
-    char asn[32] = {0};
-    char rep[32] = {0};
-    int n = 0;
-    size_t pos = 0;
-
-    for (size_t i = 0; i < strlen(value); i++) {
-        if (value[i] == '|') {
-            asn[pos] = '\0';
-            n++;
-            pos = 0;
-        } else {
-            if (n == 0) {
-                asn[pos] = value[i];
-            } else {
-                rep[pos] = value[i];
-            }
-            pos++;
-        }
-    }
-    rep[pos] = '\0';
 
     if (strlen(asn) != 0 && strlen(rep) != 0) {
         struct asn_node *node = reallocArray(asnVector->data, asnVector->size + 1, sizeof(*(asnVector->data)));
@@ -509,28 +458,8 @@ static int parseASNReputation(struct asn_vector *asnVector, const char *value) {
     return rc;
 }
 
-static int parseStatusReputation(struct status_vector *statusVector, const char *value) {
+static int parseStatusReputation(struct status_vector *statusVector, const char *ret, const char *rep) {
     int rc = 0;
-    char ret[32] = {0};
-    char rep[32] = {0};
-    int n = 0;
-    size_t pos = 0;
-
-    for (size_t i = 0; i < strlen(value); i++) {
-        if (value[i] == '|') {
-            ret[pos] = '\0';
-            n++;
-            pos = 0;
-        } else {
-            if (n == 0) {
-                ret[pos] = value[i];
-            } else {
-                rep[pos] = value[i];
-            }
-            pos++;
-        }
-    }
-    rep[pos] = '\0';
 
     if (strlen(ret) != 0 && strlen(rep) != 0) {
         uint32_t status = strtol(ret, NULL, 10);
@@ -1274,9 +1203,9 @@ static const char *setEvilRedirectURL(__attribute__((unused)) cmd_parms *cmd, vo
 static const char *setEvilAppendURI(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
     repudiator_config *cfg = (repudiator_config *) dconfig;
 
-        if (!strcasecmp("true", value) || !strcasecmp("on", value)) {
+    if (!strcasecmp("true", value) || !strcasecmp("on", value)) {
         cfg->evilAppendURI = 1;
-        } else if (!strcasecmp("false", value) || !strcasecmp("off", value)) {
+    } else if (!strcasecmp("false", value) || !strcasecmp("off", value)) {
         cfg->evilAppendURI = 0;
     } else {
         ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
@@ -1331,76 +1260,81 @@ static const char *setASNDatabase(cmd_parms *cmd, void *dconfig, const char *val
     return NULL;
 }
 
-static const char *setIPReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
+static const char *setIPReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value,
+                                   const char *value2) {
     repudiator_config *cfg = (repudiator_config *) dconfig;
 
-    const int rc = parseIPReputation(&cfg->ipReputation, value);
+    const int rc = parseIPReputation(&cfg->ipReputation, value, value2);
 
     if (rc == -1) {
         ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "IPReputation: OOM");
     } else if (rc != 0) {
-        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf, "Invalid RepudiatorIPReputation value '%s'",
-                     value);
+        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf, "Invalid RepudiatorIPReputation value '%s' '%s",
+                     value, value2);
     }
 
     return NULL;
 }
 
-static const char *setUAReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
+static const char *setUAReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value,
+                                   const char *value2) {
     repudiator_config *cfg = (repudiator_config *) dconfig;
 
-    const int rc = parseRegexReputation(&cfg->uaReputation, value);
+    const int rc = parseRegexReputation(&cfg->uaReputation, value, value2);
 
     if (rc == -1) {
         ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "UAReputation: OOM");
     } else if (rc != 0) {
-        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf, "Invalid RepudiatorUAReputation value '%s'",
-                     value);
+        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf, "Invalid RepudiatorUAReputation value '%s' '%s",
+                     value, value2);
     }
 
     return NULL;
 }
 
-static const char *setURIReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
+static const char *setURIReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value,
+                                    const char *value2) {
     repudiator_config *cfg = (repudiator_config *) dconfig;
 
-    const int rc = parseRegexReputation(&cfg->uriReputation, value);
+    const int rc = parseRegexReputation(&cfg->uriReputation, value, value2);
 
     if (rc == -1) {
         ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "URIReputation: OOM");
     } else if (rc != 0) {
-        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf, "Invalid RepudiatorURIReputation value '%s'",
-                     value);
+        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf, "Invalid RepudiatorURIReputation value '%s' '%s",
+                     value, value2);
     }
 
     return NULL;
 }
 
-static const char *setASNReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
+static const char *setASNReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value,
+                                    const char *value2) {
     repudiator_config *cfg = (repudiator_config *) dconfig;
 
-    const int rc = parseASNReputation(&cfg->asnReputation, value);
+    const int rc = parseASNReputation(&cfg->asnReputation, value, value2);
 
     if (rc == -1) {
         ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "ASNReputation: OOM");
     } else if (rc != 0) {
-        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf, "Invalid RepudiatorASNReputation value '%s'",
-                     value);
+        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf, "Invalid RepudiatorASNReputation value '%s' '%s",
+                     value, value2);
     }
 
     return NULL;
 }
 
-static const char *setStatusReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
+static const char *setStatusReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value,
+                                       const char *value2) {
     repudiator_config *cfg = (repudiator_config *) dconfig;
 
-    const int rc = parseStatusReputation(&cfg->statusReputation, value);
+    const int rc = parseStatusReputation(&cfg->statusReputation, value, value2);
 
     if (rc == -1) {
         ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "StatusReputation: OOM");
     } else if (rc != 0) {
-        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf, "Invalid RepudiatorStatusReputation value '%s'",
-                     value);
+        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf, "Invalid RepudiatorStatusReputation value '%s' '%s'",
+                     value, value2);
     }
 
     return NULL;
@@ -1573,15 +1507,16 @@ static const command_rec configCmds[] = {
 
     AP_INIT_TAKE1("RepudiatorASNDatabase", setASNDatabase, NULL, RSRC_CONF, "Set path to Maxmind ASN database"),
 
-    AP_INIT_ITERATE("RepudiatorIPReputation", setIPReputation, NULL, RSRC_CONF, "IP-address based reputation"),
+    AP_INIT_ITERATE2("RepudiatorIPReputation", setIPReputation, NULL, RSRC_CONF, "IP-address based reputation"),
 
-    AP_INIT_ITERATE("RepudiatorUAReputation", setUAReputation, NULL, RSRC_CONF, "User agent based reputation"),
+    AP_INIT_ITERATE2("RepudiatorUAReputation", setUAReputation, NULL, RSRC_CONF, "User agent based reputation"),
 
-    AP_INIT_ITERATE("RepudiatorURIReputation", setURIReputation, NULL, RSRC_CONF, "URI based reputation"),
+    AP_INIT_ITERATE2("RepudiatorURIReputation", setURIReputation, NULL, RSRC_CONF, "URI based reputation"),
 
-    AP_INIT_ITERATE("RepudiatorASNReputation", setASNReputation, NULL, RSRC_CONF, "ASN based reputation"),
+    AP_INIT_ITERATE2("RepudiatorASNReputation", setASNReputation, NULL, RSRC_CONF, "ASN based reputation"),
 
-    AP_INIT_ITERATE("RepudiatorStatusReputation", setStatusReputation, NULL, RSRC_CONF, "Return Code based reputation"),
+    AP_INIT_ITERATE2("RepudiatorStatusReputation", setStatusReputation, NULL, RSRC_CONF,
+                     "Return Code based reputation"),
 
     AP_INIT_TAKE1("RepudiatorWarnReputation", setWarnReputation, NULL, RSRC_CONF, "Warning reputation"),
 
