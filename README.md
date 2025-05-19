@@ -109,37 +109,37 @@ apxs -c -DPCRE2 -DREP_DEBUG -lmaxminddb -lpcre2-8 mod_repudiator.c
 * **RepudiatorIPReputation**<br/>
   *iterable*
 
-  Set network-based reputation, first part is network and second (after |) is reputation score.<br />
+  Set network-based reputation, first part is network and second is reputation score.<br />
   *Example:*<br />
-  `RepudiatorIPReputation 192.168.0.0/16|1000.0`
+  `RepudiatorIPReputation 192.168.0.0/16 1000.0`
 
 * **RepudiatorUAReputation**<br/>
   *iterable*
 
-  Set UserAgent-based reputation, first part regex and second (after |) is reputation score.<br />
+  Set UserAgent-based reputation, first part regex and second is reputation score.<br />
   *Example:*<br />
-  `RepudiatorUAReputation "/.*MSIE [1-9].0.*/|-400.0"`
+  `RepudiatorUAReputation ".*MSIE [1-9].0.*" -400.0`
 
 * **RepudiatorURIReputation**<br/>
   *iterable*
 
-  Set URI-based reputation, first part regex and second (after |) is reputation score.<br />
+  Set URI-based reputation, first part regex and second is reputation score.<br />
   *Example:*<br />
-  `RepudiatorURIReputation "/.*\.(env|git|bash(rc|_(history|profile))).*/|-1000.0"`
+  `RepudiatorURIReputation ".*\.(env|git|bash(rc|_(history|profile))).*" -1000.0`
 
 * **RepudiatorASNReputation**<br/>
   *iterable*
 
-  Set ASN-based reputation, first part is ASN and second (after |) is reputation score.<br />
+  Set ASN-based reputation, first part is ASN and second is reputation score.<br />
   *Example:*<br />
-  `RepudiatorASNReputation 15169|100.0`
+  `RepudiatorASNReputation 15169 100.0`
 
 * **RepudiatorStatusReputation**<br />
   *iterable*
 
-  Set HTTP-Status-based reputation, first part status code (after |) is reputation score.<br />
+  Set HTTP-Status-based reputation, first part status code is reputation score.<br />
   *Example:*<br />
-  `RepudiatorStatusReputation 404|-1.0`
+  `RepudiatorStatusReputation 404 -1.0`
 
 ## Let's ban these bad guys
 
