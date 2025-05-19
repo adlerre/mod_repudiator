@@ -1,3 +1,16 @@
+# [1.9.0](https://github.com/adlerre/mod_repudiator/compare/v1.8.1...v1.9.0) (2025-05-19)
+
+
+### Bug Fixes
+
+* ignore case and allow also on/off ([e1506e7](https://github.com/adlerre/mod_repudiator/commit/e1506e7ba974275416359636245c08ba580880ae))
+* update readme ([d16c32d](https://github.com/adlerre/mod_repudiator/commit/d16c32dac2d0ad6c81ccd56d53b9296f41e5de85))
+
+
+### Features
+
+* use apache's internal functions to parse config ([5a2ea30](https://github.com/adlerre/mod_repudiator/commit/5a2ea30e0df950e325c5ccd86a75feb38421c1bf))
+
 ## [1.8.1](https://github.com/adlerre/mod_repudiator/compare/v1.8.0...v1.8.1) (2025-05-19)
 
 
