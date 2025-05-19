@@ -1244,9 +1244,9 @@ static const char *setEnabled(__attribute__((unused)) cmd_parms *cmd, void *dcon
 static const char *setEvilModeEnabled(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
     repudiator_config *cfg = (repudiator_config *) dconfig;
 
-    if (strcmp("true", value) == 0) {
+    if (!strcasecmp("true", value) || !strcasecmp("on", value)) {
         cfg->evilMode = 1;
-    } else if (strcmp("false", value) == 0) {
+    } else if (!strcasecmp("false", value) || !strcasecmp("off", value)) {
         cfg->evilMode = 0;
     } else {
         ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
@@ -1274,9 +1274,9 @@ static const char *setEvilRedirectURL(__attribute__((unused)) cmd_parms *cmd, vo
 static const char *setEvilAppendURI(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
     repudiator_config *cfg = (repudiator_config *) dconfig;
 
-    if (strcmp("true", value) == 0) {
+        if (!strcasecmp("true", value) || !strcasecmp("on", value)) {
         cfg->evilAppendURI = 1;
-    } else if (strcmp("false", value) == 0) {
+        } else if (!strcasecmp("false", value) || !strcasecmp("off", value)) {
         cfg->evilAppendURI = 0;
     } else {
         ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
