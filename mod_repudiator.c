@@ -713,14 +713,15 @@ struct req_node *addRequest(repudiator_config *cfg, const struct ip_node *ip, co
             .asn = asn,
             .addr = *ip,
             .count = 1,
-            .lastSeen = timestamp,
-            .ipReputation = calcIPReputation(&cfg->ipReputation, ip),
-            .uaReputation = calcRegexReputation(&cfg->uaReputation, userAgent),
-            .uriReputation = calcRegexReputation(&cfg->uriReputation, uri),
-            .asnReputation = calcASNReputation(&cfg->asnReputation, asn)
+            .lastSeen = timestamp
         };
 
-        return &cfg->requests.data[cfg->requests.size - 1];
+        node = &cfg->requests.data[cfg->requests.size - 1];
+        node->ipReputation = calcIPReputation(&cfg->ipReputation, ip);
+        node->uaReputation = calcRegexReputation(&cfg->uaReputation, userAgent);
+        node->uriReputation = calcRegexReputation(&cfg->uriReputation, uri);
+        node->asnReputation = calcASNReputation(&cfg->asnReputation, asn);
+        return node;
     }
 
     struct req_node *node = &cfg->requests.data[idx];
