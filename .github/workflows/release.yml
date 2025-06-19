@@ -149,6 +149,7 @@ jobs:
       - name: Build RPM
         run: |
           sed -i "s/0.0.0/${{ needs.semantic-release.outputs.new_release_version }}/g" mod_repudiator/mod_repudiator.spec
+          mod_repudiator/.github/workflows/rpm_changelog.sh mod_repudiator/CHANGELOG.md mod_repudiator/mod_repudiator.spec
           cat mod_repudiator/mod_repudiator.spec
           mkdir mock
           docker run --privileged --cap-add=SYS_ADMIN -t --rm -v $PWD/mod_repudiator:/root/mod_repudiator -v $PWD/mock:/var/lib/mock mock:latest sh -c "mock -r rocky+epel-${{ matrix.version }}-x86_64 --spec /root/mod_repudiator/mod_repudiator.spec --sources /root/mod_repudiator"
