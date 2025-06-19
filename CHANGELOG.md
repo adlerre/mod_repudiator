@@ -1,3 +1,10 @@
+# [1.10.0](https://github.com/adlerre/mod_repudiator/compare/v1.9.0...v1.10.0) (2025-06-19)
+
+
+### Features
+
+* add changelog to rpm ([#9](https://github.com/adlerre/mod_repudiator/issues/9)) ([05147b6](https://github.com/adlerre/mod_repudiator/commit/05147b6343b56e34d8ce438ba86d37c51a5ad0cf))
+
 # [1.9.0](https://github.com/adlerre/mod_repudiator/compare/v1.8.1...v1.9.0) (2025-05-19)
 
 
