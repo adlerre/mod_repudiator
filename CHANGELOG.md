@@ -1,3 +1,10 @@
+# [1.11.0](https://github.com/adlerre/mod_repudiator/compare/v1.10.0...v1.11.0) (2025-11-20)
+
+
+### Features
+
+* implement country based reputation ([973a87c](https://github.com/adlerre/mod_repudiator/commit/973a87cddd1a434ff18a8e40e6214ecc1f2c4a99))
+
 # [1.10.0](https://github.com/adlerre/mod_repudiator/compare/v1.9.0...v1.10.0) (2025-06-19)
 
 
