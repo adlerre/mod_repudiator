@@ -137,7 +137,7 @@ apxs -c -DPCRE2 -DREP_DEBUG -lmaxminddb -lpcre2-8 mod_repudiator.c
 * **RepudiatorStatusReputation**<br />
   *iterable*
 
-  Set HTTP-Status-based reputation, first part status code is reputation score.<br />
+  Set HTTP-Status-based reputation, first part status code and second is reputation score.<br />
   *Example:*<br />
   `RepudiatorStatusReputation 404 -1.0`
 
