@@ -1,3 +1,10 @@
+## [1.11.1](https://github.com/adlerre/mod_repudiator/compare/v1.11.0...v1.11.1) (2025-11-20)
+
+
+### Bug Fixes
+
+* fix calculation of country reputation ([045affd](https://github.com/adlerre/mod_repudiator/commit/045affd7288603df5743383a0842a04c070ba1e8))
+
 # [1.11.0](https://github.com/adlerre/mod_repudiator/compare/v1.10.0...v1.11.0) (2025-11-20)
 
 
