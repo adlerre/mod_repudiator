@@ -121,6 +121,16 @@ struct asn_vector {
     size_t size;
 };
 
+struct country_node {
+    char code[2];
+    double reputation;
+};
+
+struct country_vector {
+    struct country_node *data;
+    size_t size;
+};
+
 struct status_node {
     uint32_t status;
     double reputation;
@@ -155,6 +165,7 @@ struct nw_count_vector {
 
 struct req_node {
     u_int32_t asn;
+    char countryCode[2];
     struct ip_node addr;
 
     size_t count;
@@ -164,6 +175,7 @@ struct req_node {
     double uaReputation;
     double uriReputation;
     double asnReputation;
+    double countryReputation;
     double statusReputation;
     double reputation;
 };
@@ -180,10 +192,12 @@ typedef struct {
     int evilAppendURI;
     long evilDelay;
     char *asnDBPath;
+    char *countryDBPath;
     struct ip_vector ipReputation;
     struct re_vector uaReputation;
     struct re_vector uriReputation;
     struct asn_vector asnReputation;
+    struct country_vector countryReputation;
     struct status_vector statusReputation;
     double warnReputation;
     double blockReputation;
@@ -194,7 +208,8 @@ typedef struct {
     int warnHttpReply;
     int blockHttpReply;
 
-    MMDB_s *mmdb;
+    MMDB_s *mmdbASN;
+    MMDB_s *mmdbCountry;
     struct asn_count_vector asns;
     struct nw_count_vector networks;
     struct req_vector requests;
@@ -205,6 +220,8 @@ double calcIPReputation(const struct ip_vector *ipReputation, const struct ip_no
 double calcRegexReputation(const struct re_vector *reVector, const char *str);
 
 double calcASNReputation(const struct asn_vector *asnVector, u_int32_t asn);
+
+double calcCountryReputation(const struct country_vector *countryVector, const char *code);
 
 double calcStatusReputation(const struct status_vector *statusVector, u_int32_t status);
 
@@ -458,6 +475,28 @@ static int parseASNReputation(struct asn_vector *asnVector, const char *asn, con
     return rc;
 }
 
+static int parseCountryReputation(struct country_vector *countryVector, const char *code, const char *rep) {
+    int rc = 0;
+
+    if (strlen(code) != 0 && strlen(rep) != 0) {
+        struct country_node *node = reallocArray(countryVector->data, countryVector->size + 1,
+                                                 sizeof(*(countryVector->data)));
+        if (!node) {
+            return -1;
+        }
+
+        countryVector->data = node;
+        countryVector->data[countryVector->size++] = (struct country_node){
+            .reputation = strtod(rep, NULL)
+        };
+        strncpy(node->code, code, sizeof(node->code));
+    } else {
+        rc = -2;
+    }
+
+    return rc;
+}
+
 static int parseStatusReputation(struct status_vector *statusVector, const char *ret, const char *rep) {
     int rc = 0;
 
@@ -551,6 +590,17 @@ double calcASNReputation(const struct asn_vector *asnVector, const u_int32_t asn
     return 0.0;
 }
 
+double calcCountryReputation(const struct country_vector *countryVector, const char *code) {
+    for (size_t i = 0; i < countryVector->size; ++i) {
+        const struct country_node *node = &countryVector->data[i];
+        if (code != NULL && strcasecmp(node->code, code) == 0) {
+            return node->reputation;
+        }
+    }
+
+    return 0.0;
+}
+
 double calcStatusReputation(const struct status_vector *statusVector, const u_int32_t status) {
     for (size_t i = 0; i < statusVector->size; ++i) {
         const struct status_node *node = &statusVector->data[i];
@@ -561,7 +611,7 @@ double calcStatusReputation(const struct status_vector *statusVector, const u_in
     return 0.0;
 }
 
-uint32_t lockupIPInfo(MMDB_s *mmdb, struct ip_node *node) {
+uint32_t lookupIPInfo(MMDB_s *mmdb, struct ip_node *node) {
     uint32_t asn = 0;
     int mmdb_error = 0;
     int gai_error = 0;
@@ -612,6 +662,41 @@ uint32_t lockupIPInfo(MMDB_s *mmdb, struct ip_node *node) {
     return asn;
 }
 
+char *lookupCountryInfo(MMDB_s *mmdb, struct ip_node *node) {
+    char *code = NULL;
+    int mmdb_error = 0;
+    int gai_error = 0;
+
+    if (mmdb != NULL) {
+        char buf[128] = {0};
+        if (node->family == AF_INET) {
+            inet_ntop(AF_INET, &node->ip.v4, buf, sizeof(buf));
+        } else {
+            inet_ntop(AF_INET6, &node->ip.v6, buf, sizeof(buf));
+        }
+
+        MMDB_lookup_result_s lookup_result = MMDB_lookup_string(mmdb, buf, &gai_error, &mmdb_error);
+        if (mmdb_error == MMDB_SUCCESS) {
+            if (lookup_result.found_entry) {
+                MMDB_entry_data_s entry_data;
+
+                const char **lookup_path = calloc(2, sizeof(const char *));
+                lookup_path[0] = "country";
+                lookup_path[1] = "iso_code";
+
+                mmdb_error = MMDB_aget_value(&lookup_result.entry, &entry_data, lookup_path);
+                if (mmdb_error == MMDB_SUCCESS) {
+                    code = strndup(entry_data.utf8_string, entry_data.data_size);
+                }
+                free(lookup_path);
+
+                return code;
+            }
+        }
+    }
+    return code;
+}
+
 long findRequest(const struct req_vector *requests, const struct ip_node *ip) {
     long idx = -1;
     for (size_t i = 0; i < requests->size; ++i) {
@@ -628,7 +713,8 @@ long findRequest(const struct req_vector *requests, const struct ip_node *ip) {
     return idx;
 }
 
-struct req_node *addRequest(repudiator_config *cfg, const struct ip_node *ip, const uint32_t asn, const char *userAgent,
+struct req_node *addRequest(repudiator_config *cfg, const struct ip_node *ip, const uint32_t asn,
+                            const char *countryCode, const char *userAgent,
                             const char *uri, const time_t timestamp) {
     const long idx = findRequest(&cfg->requests, ip);
     if (idx == -1) {
@@ -646,10 +732,14 @@ struct req_node *addRequest(repudiator_config *cfg, const struct ip_node *ip, co
         };
 
         node = &cfg->requests.data[cfg->requests.size - 1];
+        if (countryCode != NULL) {
+            strncpy(node->countryCode, countryCode, sizeof(node->countryCode));
+        }
         node->ipReputation = calcIPReputation(&cfg->ipReputation, ip);
         node->uaReputation = calcRegexReputation(&cfg->uaReputation, userAgent);
         node->uriReputation = calcRegexReputation(&cfg->uriReputation, uri);
         node->asnReputation = calcASNReputation(&cfg->asnReputation, asn);
+        node->countryReputation = calcCountryReputation(&cfg->countryReputation, countryCode);
         return node;
     }
 
@@ -661,12 +751,14 @@ struct req_node *addRequest(repudiator_config *cfg, const struct ip_node *ip, co
         node->uaReputation += calcRegexReputation(&cfg->uaReputation, userAgent);
         node->uriReputation += calcRegexReputation(&cfg->uriReputation, uri);
         node->asnReputation += calcASNReputation(&cfg->asnReputation, asn);
+        node->countryReputation = calcCountryReputation(&cfg->countryReputation, countryCode);
     } else {
         node->count = 1;
         node->ipReputation = calcIPReputation(&cfg->ipReputation, ip);
         node->uaReputation = calcRegexReputation(&cfg->uaReputation, userAgent);
         node->uriReputation = calcRegexReputation(&cfg->uriReputation, uri);
         node->asnReputation = calcASNReputation(&cfg->asnReputation, asn);
+        node->countryReputation = calcCountryReputation(&cfg->countryReputation, countryCode);
     }
     node->lastSeen = timestamp;
 
@@ -851,8 +943,8 @@ double calcReputation(const repudiator_config *cfg, const struct req_node *reqNo
                        ? cfg->perASNReputation * (double) cfg->asns.data[idx].count
                        : 0.0;
         default:
-            return (reqNode->ipReputation + reqNode->uaReputation + reqNode->uriReputation + reqNode->asnReputation) /
-                   (double) reqNode->count;
+            return (reqNode->ipReputation + reqNode->uaReputation + reqNode->uriReputation + reqNode->asnReputation +
+                    reqNode->countryReputation) / (double) reqNode->count;
     }
 }
 
@@ -866,10 +958,12 @@ static void *createDirConf(apr_pool_t *p, __attribute__((unused)) char *context)
     *cfg = (repudiator_config){
         .enabled = 0,
         .asnDBPath = NULL,
+        .countryDBPath = NULL,
         .ipReputation = (struct ip_vector){.data = NULL, .size = 0},
         .uaReputation = (struct re_vector){.data = NULL, .size = 0},
         .uriReputation = (struct re_vector){.data = NULL, .size = 0},
         .asnReputation = (struct asn_vector){.data = NULL, .size = 0},
+        .countryReputation = (struct country_vector){.data = NULL, .size = 0},
         .warnReputation = DEFAULT_WARN_REPUTATION,
         .blockReputation = DEFAULT_BLOCK_REPUTATION,
         .perIPReputation = DEFAULT_PER_IP_REPUTATION,
@@ -908,13 +1002,14 @@ static int accessChecker(request_rec *r) {
             return OK;
         }
 
-        const uint32_t asn = lockupIPInfo(cfg->mmdb, &addr);
+        const uint32_t asn = lookupIPInfo(cfg->mmdbASN, &addr);
+        const char *countryCode = lookupCountryInfo(cfg->mmdbCountry, &addr);
         const char *userAgent = apr_table_get(r->headers_in, "user-agent");
 
         incASNCount(&cfg->asns, asn, t, cfg->scanTime);
         incNetworkCount(&cfg->networks, &addr, t, cfg->scanTime);
 
-        struct req_node *req = addRequest(cfg, &addr, asn, userAgent, r->unparsed_uri, t);
+        struct req_node *req = addRequest(cfg, &addr, asn, countryCode, userAgent, r->unparsed_uri, t);
         if (req == NULL) {
             ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "Couldn't add request: OOM");
             return OK;
@@ -946,6 +1041,7 @@ static int accessChecker(request_rec *r) {
             char ip[128] = {0};
             char mask[128] = {0};
             char asnStr[20] = {0};
+            char countryStr[20] = {0};
 
             if (req->addr.family == AF_INET) {
                 inet_ntop(AF_INET, &req->addr.ip.v4, ip, sizeof(ip));
@@ -956,24 +1052,26 @@ static int accessChecker(request_rec *r) {
             }
 
             snprintf(asnStr, sizeof(asnStr), "AS%d", asn);
+            snprintf(countryStr, sizeof(countryStr), "|%s", countryCode != NULL ? countryCode : "private");
 
 #ifdef REP_DEBUG
-        ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, ap_server_conf,
-                     "%s/%s (%s) %s %s \"%s\" - %s (b:%4.2f (%4.2f %4.2f %4.2f %4.2f)|ip:%4.2f (%lu)|net:%4.2f (%lu)|asn:%4.2f (%lu) %4.2f)",
-                     ip, mask, asnStr, r->hostname, r->unparsed_uri, userAgent ? userAgent : "-",
-                     repState == REP_OK ? "OK" : repState == REP_WARN ? "WARN" : "BLOCK", basicRep,
-                     req->ipReputation / req->count, req->uaReputation / req->count,
-                     req->uriReputation / req->count, req->statusReputation, perIPRep, req->count, perNetRep, nwCount,
-                     perASNRep, asnCount, req->reputation);
+            ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, ap_server_conf,
+                         "%s/%s (%s%s) %s %s \"%s\" - %s (b:%4.2f (%4.2f %4.2f %4.2f %4.2f)|ip:%4.2f (%lu)|net:%4.2f (%lu)|asn:%4.2f (%lu) %4.2f)",
+                         ip, mask, asnStr, countryStr, r->hostname, r->unparsed_uri, userAgent ? userAgent : "-",
+                         repState == REP_OK ? "OK" : repState == REP_WARN ? "WARN" : "BLOCK", basicRep,
+                         req->ipReputation / req->count, req->uaReputation / req->count,
+                         req->uriReputation / req->count, req->statusReputation, perIPRep, req->count, perNetRep,
+                         nwCount,
+                         perASNRep, asnCount, req->reputation);
 #else
             ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, ap_server_conf,
-                         "%s/%s (%s) %s %s \"%s\" - %s (%4.2f)",
-                         ip, mask, asnStr, r->hostname, r->unparsed_uri, userAgent ? userAgent : "-",
+                         "%s/%s (%s%s) %s %s \"%s\" - %s (%4.2f)",
+                         ip, mask, asnStr, countryStr, r->hostname, r->unparsed_uri, userAgent ? userAgent : "-",
                          repState == REP_OK ? "OK" : repState == REP_WARN ? "WARN" : "BLOCK", req->reputation);
 #endif
 
 #ifdef REP_DEBUG
-        if (repState != REP_OK) {
+            if (repState != REP_OK) {
 #endif
             if (cfg->evilMode == 1 && repState == REP_BLOCK) {
                 char location[4096] = {0};
@@ -1150,6 +1248,7 @@ static apr_status_t destroyConfig(void *dconfig) {
         free(cfg->networks.data);
         free(cfg->asns.data);
         free(cfg->asnDBPath);
+        free(cfg->countryDBPath);
     }
     return APR_SUCCESS;
 }
@@ -1255,7 +1354,27 @@ static const char *setASNDatabase(cmd_parms *cmd, void *dconfig, const char *val
 
     apr_pool_pre_cleanup_register(cmd->pool, mmdb, cleanupDatabase);
 
-    cfg->mmdb = mmdb;
+    cfg->mmdbASN = mmdb;
+
+    return NULL;
+}
+
+static const char *setCountryDatabase(cmd_parms *cmd, void *dconfig, const char *value) {
+    repudiator_config *cfg = (repudiator_config *) dconfig;
+
+    cfg->countryDBPath = strdup(value);
+
+    MMDB_s *mmdb = apr_pcalloc(cmd->pool, sizeof(MMDB_s));
+    int mmdb_error = MMDB_open(cfg->countryDBPath, MMDB_MODE_MMAP, mmdb);
+    if (mmdb_error != MMDB_SUCCESS) {
+        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf, "CountryDatabase: Failed to open %s: %s",
+                     cfg->countryDBPath, MMDB_strerror(mmdb_error));
+        return NULL;
+    }
+
+    apr_pool_pre_cleanup_register(cmd->pool, mmdb, cleanupDatabase);
+
+    cfg->mmdbCountry = mmdb;
 
     return NULL;
 }
@@ -1318,6 +1437,22 @@ static const char *setASNReputation(__attribute__((unused)) cmd_parms *cmd, void
         ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "ASNReputation: OOM");
     } else if (rc != 0) {
         ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf, "Invalid RepudiatorASNReputation value '%s' '%s",
+                     value, value2);
+    }
+
+    return NULL;
+}
+
+static const char *setCountryReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value,
+                                        const char *value2) {
+    repudiator_config *cfg = (repudiator_config *) dconfig;
+
+    const int rc = parseCountryReputation(&cfg->countryReputation, value, value2);
+
+    if (rc == -1) {
+        ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "CountryReputation: OOM");
+    } else if (rc != 0) {
+        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf, "Invalid RepudiatorCountyReputation value '%s' '%s",
                      value, value2);
     }
 
@@ -1507,6 +1642,9 @@ static const command_rec configCmds[] = {
 
     AP_INIT_TAKE1("RepudiatorASNDatabase", setASNDatabase, NULL, RSRC_CONF, "Set path to Maxmind ASN database"),
 
+    AP_INIT_TAKE1("RepudiatorCountryDatabase", setCountryDatabase, NULL, RSRC_CONF,
+                  "Set path to Maxmind country database"),
+
     AP_INIT_ITERATE2("RepudiatorIPReputation", setIPReputation, NULL, RSRC_CONF, "IP-address based reputation"),
 
     AP_INIT_ITERATE2("RepudiatorUAReputation", setUAReputation, NULL, RSRC_CONF, "User agent based reputation"),
@@ -1514,6 +1652,8 @@ static const command_rec configCmds[] = {
     AP_INIT_ITERATE2("RepudiatorURIReputation", setURIReputation, NULL, RSRC_CONF, "URI based reputation"),
 
     AP_INIT_ITERATE2("RepudiatorASNReputation", setASNReputation, NULL, RSRC_CONF, "ASN based reputation"),
+
+    AP_INIT_ITERATE2("RepudiatorCountryReputation", setCountryReputation, NULL, RSRC_CONF, "Country based reputation"),
 
     AP_INIT_ITERATE2("RepudiatorStatusReputation", setStatusReputation, NULL, RSRC_CONF,
                      "Return Code based reputation"),

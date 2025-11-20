@@ -106,6 +106,10 @@ apxs -c -DPCRE2 -DREP_DEBUG -lmaxminddb -lpcre2-8 mod_repudiator.c
 
   Path to GeoLite2 ASN database
 
+* **RepudiatorCountryDatabase**<br/>
+
+  Path to GeoLite2 country database
+
 * **RepudiatorIPReputation**<br/>
   *iterable*
 
@@ -133,6 +137,13 @@ apxs -c -DPCRE2 -DREP_DEBUG -lmaxminddb -lpcre2-8 mod_repudiator.c
   Set ASN-based reputation, first part is ASN and second is reputation score.<br />
   *Example:*<br />
   `RepudiatorASNReputation 15169 100.0`
+
+* **RepudiatorCountryReputation**<br/>
+  *iterable*
+
+  Set Country-based reputation, first part is the ISO country code and second is reputation score.<br />
+  *Example:*<br />
+  `RepudiatorCountryReputation DE 100.0`
 
 * **RepudiatorStatusReputation**<br />
   *iterable*
