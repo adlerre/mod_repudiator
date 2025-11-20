@@ -751,7 +751,7 @@ struct req_node *addRequest(repudiator_config *cfg, const struct ip_node *ip, co
         node->uaReputation += calcRegexReputation(&cfg->uaReputation, userAgent);
         node->uriReputation += calcRegexReputation(&cfg->uriReputation, uri);
         node->asnReputation += calcASNReputation(&cfg->asnReputation, asn);
-        node->countryReputation = calcCountryReputation(&cfg->countryReputation, countryCode);
+        node->countryReputation += calcCountryReputation(&cfg->countryReputation, countryCode);
     } else {
         node->count = 1;
         node->ipReputation = calcIPReputation(&cfg->ipReputation, ip);
@@ -1056,11 +1056,12 @@ static int accessChecker(request_rec *r) {
 
 #ifdef REP_DEBUG
             ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, ap_server_conf,
-                         "%s/%s (%s%s) %s %s \"%s\" - %s (b:%4.2f (%4.2f %4.2f %4.2f %4.2f)|ip:%4.2f (%lu)|net:%4.2f (%lu)|asn:%4.2f (%lu) %4.2f)",
+                         "%s/%s (%s%s) %s %s \"%s\" - %s (b:%4.2f (%4.2f %4.2f %4.2f %4.2f %4.2f)|ip:%4.2f (%lu)|net:%4.2f (%lu)|asn:%4.2f (%lu) %4.2f)",
                          ip, mask, asnStr, countryStr, r->hostname, r->unparsed_uri, userAgent ? userAgent : "-",
                          repState == REP_OK ? "OK" : repState == REP_WARN ? "WARN" : "BLOCK", basicRep,
                          req->ipReputation / req->count, req->uaReputation / req->count,
-                         req->uriReputation / req->count, req->statusReputation, perIPRep, req->count, perNetRep,
+                         req->uriReputation / req->count, req->countryReputation / req->count, req->statusReputation,
+                         perIPRep, req->count, perNetRep,
                          nwCount,
                          perASNRep, asnCount, req->reputation);
 #else
