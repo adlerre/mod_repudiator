@@ -1,3 +1,10 @@
+## [1.11.2](https://github.com/adlerre/mod_repudiator/compare/v1.11.1...v1.11.2) (2025-11-21)
+
+
+### Bug Fixes
+
+* fix empty country code on request ([059396b](https://github.com/adlerre/mod_repudiator/commit/059396bd5e875ea49d55f314bf0daa5b1399b29e))
+
 ## [1.11.1](https://github.com/adlerre/mod_repudiator/compare/v1.11.0...v1.11.1) (2025-11-20)
 
 
