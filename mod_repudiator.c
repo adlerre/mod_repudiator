@@ -122,7 +122,7 @@ struct asn_vector {
 };
 
 struct country_node {
-    char code[2];
+    char *code;
     double reputation;
 };
 
@@ -165,7 +165,7 @@ struct nw_count_vector {
 
 struct req_node {
     u_int32_t asn;
-    char countryCode[2];
+    char *countryCode;
     struct ip_node addr;
 
     size_t count;
@@ -487,9 +487,9 @@ static int parseCountryReputation(struct country_vector *countryVector, const ch
 
         countryVector->data = node;
         countryVector->data[countryVector->size++] = (struct country_node){
+            .code = strdup(code),
             .reputation = strtod(rep, NULL)
         };
-        strncpy(node->code, code, sizeof(node->code));
     } else {
         rc = -2;
     }
@@ -593,7 +593,7 @@ double calcASNReputation(const struct asn_vector *asnVector, const u_int32_t asn
 double calcCountryReputation(const struct country_vector *countryVector, const char *code) {
     for (size_t i = 0; i < countryVector->size; ++i) {
         const struct country_node *node = &countryVector->data[i];
-        if (code != NULL && strcasecmp(node->code, code) == 0) {
+        if (code != NULL && node->code != NULL && strcasecmp(node->code, code) == 0) {
             return node->reputation;
         }
     }
@@ -726,15 +726,13 @@ struct req_node *addRequest(repudiator_config *cfg, const struct ip_node *ip, co
         cfg->requests.data = node;
         cfg->requests.data[cfg->requests.size++] = (struct req_node){
             .asn = asn,
+            .countryCode = countryCode != NULL ? strdup(countryCode) : NULL,
             .addr = *ip,
             .count = 1,
             .lastSeen = timestamp
         };
 
         node = &cfg->requests.data[cfg->requests.size - 1];
-        if (countryCode != NULL) {
-            strncpy(node->countryCode, countryCode, sizeof(node->countryCode));
-        }
         node->ipReputation = calcIPReputation(&cfg->ipReputation, ip);
         node->uaReputation = calcRegexReputation(&cfg->uaReputation, userAgent);
         node->uriReputation = calcRegexReputation(&cfg->uriReputation, uri);
