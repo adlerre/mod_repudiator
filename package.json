@@ -1,0 +1,39 @@
+{
+  "name": "mod_repudiator-state-template",
+  "author": "René Adler (eagle)",
+  "license": "GPL-3.0",
+  "scripts": {
+    "build": "webpack --config ./state-template/webpack-config.js --mode production",
+    "watch": "webpack --config ./state-template/webpack-config.js --mode development --watch"
+  },
+  "private": true,
+  "browser": [
+    "last 2 Chrome versions",
+    "last 1 Firefox version",
+    "last 2 Edge major versions",
+    "last 2 Safari major versions",
+    "last 2 iOS major versions",
+    "Firefox ESR"
+  ],
+  "devDependencies": {
+    "css-loader": "^7.1.4",
+    "css-minimizer-webpack-plugin": "^8.0.0",
+    "file-loader": "^6.2.0",
+    "html-loader": "^5.1.0",
+    "html-webpack-plugin": "^5.6.6",
+    "image-minimizer-webpack-plugin": "^5.0.0",
+    "imagemin": "^9.0.1",
+    "imagemin-pngquant": "^10.0.0",
+    "imagemin-svgo": "^12.0.0",
+    "mini-css-extract-plugin": "^2.10.2",
+    "sass": "^1.98.0",
+    "sass-loader": "^16.0.7",
+    "style-loader": "^4.0.0",
+    "terser-webpack-plugin": "^5.4.0",
+    "ts-loader": "^9.5.4",
+    "typescript": "^6.0.2",
+    "url-loader": "^4.1.1",
+    "webpack": "^5.105.4",
+    "webpack-cli": "^7.0.2"
+  }
+}

@@ -1,0 +1,11 @@
+@import "variables";
+
+@each $name, $color in $colors {
+  .bg-#{$name} {
+    background-color: var(--ui-#{$name}) !important;
+  }
+
+  .text-#{$name} {
+    color: var(--ui-#{$name}) !important;
+  }
+}

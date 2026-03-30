@@ -1,2 +1,7 @@
 /.idea/
 /cmake-build-debug/
+/.libs/
+/dist/
+/node_modules/
+/*.l[ao]
+/*.sl[ao]

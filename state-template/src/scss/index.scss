@@ -1,0 +1,41 @@
+@import "variables";
+@import "color";
+@import "grid";
+
+*, *:before, *:after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--ui-body-bg);
+  color: var(--ui-body-color);
+  font-family: var(--ui-body-font-family), serif;
+  font-size: var(--ui-body-font-size);
+  font-weight: var(--ui-body-font-weight);
+  line-height: var(--ui-body-line-height);
+
+  margin: var(--ui-body-margin-width);
+}
+
+#logo {
+  display: block;
+  width: var(--ui-logo-width);
+  height: var(--ui-logo-height);
+  margin-left: auto;
+  margin-right: auto;
+  background-color: var(--ui-logo-color);
+  mask: url("../assets/simple-logo.svg") no-repeat center;
+}
+
+.rep-reason {
+  margin-bottom: 0.5rem;
+
+  .rep-reason-headline {
+    font-weight: bold;
+  }
+}

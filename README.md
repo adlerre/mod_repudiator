@@ -152,6 +152,10 @@ apxs -c -DPCRE2 -DREP_DEBUG -lmaxminddb -lpcre2-8 mod_repudiator.c
   *Example:*<br />
   `RepudiatorStatusReputation 404 -1.0`
 
+* **RepudiatorStateTemplateFile**<br />
+  
+  Path to state template file. See [example](./state-template/).
+
 ## Let's ban these bad guys
 
 Install __fail2ban__ and add custom jail.
