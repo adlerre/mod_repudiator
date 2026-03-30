@@ -1,4 +1,12 @@
 {
+  "name": "mod_repudiator-state-template",
+  "author": "René Adler (eagle)",
+  "license": "GPL-3.0",
+  "scripts": {
+    "build": "webpack --config ./state-template/webpack-config.js --mode production",
+    "watch": "webpack --config ./state-template/webpack-config.js --mode development --watch"
+  },
+  "private": true,
   "browser": [
     "last 2 Chrome versions",
     "last 1 Firefox version",
