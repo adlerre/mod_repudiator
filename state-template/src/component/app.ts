@@ -36,8 +36,10 @@ export class AppComponent {
                 const repState: ReputationState = JSON.parse(rsElm.innerText);
 
                 if (repState.state === "warn") {
+                    document.title = "Request was throttled"
                     tCmp.setTitle("Request was throttled");
                 } else {
+                    document.title = "Request was blocked";
                     tCmp.setTitle("Request was blocked");
                 }
 
