@@ -1,0 +1,46 @@
+@use "functions";
+
+$colors: (
+        "primary": orange,
+        "success": #198754,
+        "danger": #DC3545,
+        "info": #0D6EFD,
+        "warning": #baba07,
+        "muted": #6c757d,
+        "eigengrau": #16161d,
+        "white": white
+) !default;
+
+:root {
+  --ui-gutter-x: 1.5rem;
+  --ui-gutter-y: 0;
+
+  --ui-body-bg: #fff;
+  --ui-body-color: black;
+
+  --ui-logo-color: black;
+  --ui-logo-width: 250px;
+  --ui-logo-height: 210px;
+
+  --ui-font-sans-serif: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --ui-body-font-family: var(--ui-font-sans-serif);
+  --ui-body-font-size: 1rem;
+  --ui-body-font-weight: 400;
+  --ui-body-line-height: 1.5;
+
+  --ui-body-margin-width: 0.5rem;
+
+  @each $name, $color in $colors {
+    --ui-#{$name}: #{$color};
+    --ui-#{$name}-rgb: #{toRGB($color)};
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ui-body-bg: #0d1117;
+    --ui-body-color: #dee2e6;
+
+    --ui-logo-color: white;
+  }
+}

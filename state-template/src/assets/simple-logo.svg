@@ -1,0 +1,56 @@
+<!--
+  - This program is free software; you can use it, redistribute it
+  - and / or modify it under the terms of the GNU General Public License
+  - (GPL) as published by the Free Software Foundation; either version 3
+  - of the License or (at your option) any later version.
+  -
+  - This program is distributed in the hope that it will be useful, but
+  - WITHOUT ANY WARRANTY; without even the implied warranty of
+  - MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  - GNU General Public License for more details.
+  -
+  - You should have received a copy of the GNU General Public License
+  - along with this program, in a file called gpl.txt or license.txt.
+  - If not, write to the Free Software Foundation Inc.,
+  - 59 Temple Place - Suite 330, Boston, MA  02111-1307 USA
+  -->
+
+<svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+    <rect width="128" height="128" fill="transparent"/>
+
+    <!-- Firewall (links, klar reduziert) -->
+    <g id="firewall" fill="currentColor">
+        <rect x="16" y="20" width="36" height="12"/>
+        <rect x="16" y="36" width="16" height="16"/>
+        <rect x="36" y="36" width="16" height="16"/>
+
+        <rect x="16" y="56" width="36" height="16"/>
+
+        <rect x="16" y="76" width="16" height="16"/>
+        <rect x="36" y="76" width="16" height="16"/>
+
+        <rect x="16" y="96" width="36" height="12"/>
+    </g>
+
+    <!-- R Hauptform -->
+    <path id="big-r" d="
+    M56 24
+    L84 24
+    C100 24, 108 32, 108 44
+    C108 56, 100 64, 84 64
+    L56 64
+    L56 24
+    Z
+
+    M56 64
+    L84 64
+    L108 104
+    L88 104
+    L70 76
+    L56 76
+    Z"
+          fill="currentColor"/>
+
+    <!-- Firewall Übergang (Trennung sichtbar machen) -->
+    <rect x="52" y="56" width="8" height="16" fill="transparent"/>
+</svg>

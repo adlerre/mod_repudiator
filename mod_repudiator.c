@@ -76,6 +76,8 @@ AP_DECLARE_MODULE(repudiator);
 #define DEFAULT_WARN_HTTP_REPLY     HTTP_TOO_MANY_REQUESTS
 #define DEFAULT_BLOCK_HTTP_REPLY    HTTP_FORBIDDEN
 
+#define MAX_BUF_LEN 1000000
+
 struct ip_node {
     union {
         struct in_addr v4;
@@ -213,6 +215,8 @@ typedef struct {
     struct asn_count_vector asns;
     struct nw_count_vector networks;
     struct req_vector requests;
+
+    char *stateTemplate;
 } repudiator_config;
 
 double calcIPReputation(const struct ip_vector *ipReputation, const struct ip_node *ipNode);
@@ -242,6 +246,53 @@ static void delay(const long millis) {
 static int startsWith(const char *str, const char *prefix) {
     while (*prefix && *str == *prefix) ++str, ++prefix;
     return *prefix == 0;
+}
+
+// https://stackoverflow.com/questions/779875/what-function-is-to-replace-a-substring-from-a-string-in-c
+static char *str_replace(char *orig, char *rep, char *with) {
+    char *result; // the return string
+    char *ins; // the next insert point
+    char *tmp; // varies
+    int len_rep; // length of rep (the string to remove)
+    int len_with; // length of with (the string to replace rep with)
+    int len_front; // distance between rep and end of last rep
+    int count; // number of replacements
+
+    // sanity checks and initialization
+    if (!orig || !rep)
+        return NULL;
+    len_rep = strlen(rep);
+    if (len_rep == 0)
+        return NULL; // empty rep causes infinite loop during count
+    if (!with)
+        with = "";
+    len_with = strlen(with);
+
+    // count the number of replacements needed
+    ins = orig;
+    for (count = 0; (tmp = strstr(ins, rep)); ++count) {
+        ins = tmp + len_rep;
+    }
+
+    tmp = result = malloc(strlen(orig) + (len_with - len_rep) * count + 1);
+
+    if (!result)
+        return NULL;
+
+    // first time through the loop, all the variable are set correctly
+    // from here on,
+    //    tmp points to the end of the result string
+    //    ins points to the next occurrence of rep in orig
+    //    orig points to the remainder of orig after "end of rep"
+    while (count--) {
+        ins = strstr(orig, rep);
+        len_front = ins - orig;
+        tmp = strncpy(tmp, orig, len_front) + len_front;
+        tmp = strcpy(tmp, with) + len_with;
+        orig += len_front + len_rep; // move to next "end of rep"
+    }
+    strcpy(tmp, orig);
+    return result;
 }
 
 static uint32_t prefix2mask(int prefix) {
@@ -973,6 +1024,7 @@ static void *createDirConf(apr_pool_t *p, __attribute__((unused)) char *context)
         .asns = (struct asn_count_vector){.data = NULL, .size = 0},
         .networks = (struct nw_count_vector){.data = NULL, .size = 0},
         .requests = (struct req_vector){.data = NULL, .size = 0},
+        .stateTemplate = NULL
     };
 
     return cfg;
@@ -1116,6 +1168,37 @@ static int accessChecker(request_rec *r) {
                 return HTTP_MOVED_TEMPORARILY;
             }
 
+            if (cfg->stateTemplate != NULL) {
+                char json[MAX_BUF_LEN + 1] = {0};
+
+                snprintf(
+                    json,
+                    sizeof(json),
+                    "{\"state\": \"%s\", \"warn\": %4.2f, \"block\": %4.2f, \"ip\": %4.2f, \"asn\": %4.2f, \"ua\": %4.2f, \"uri\": %4.2f, \"country\": %4.2f, \"status\": %4.2f, \"perIp\": %4.2f, \"perNet\": %4.2f, \"perASN\": %4.2f}",
+                    repState == REP_WARN ? "warn" : "block",
+                    cfg->warnReputation,
+                    cfg->blockReputation,
+                    req->ipReputation / req->count,
+                    req->asnReputation / req->count,
+                    req->uaReputation / req->count,
+                    req->uriReputation / req->count,
+                    req->countryReputation / req->count,
+                    req->statusReputation,
+                    perIPRep,
+                    perNetRep,
+                    perASNRep
+                );
+
+                ap_set_content_type(r, "text/html");
+                char *res = str_replace(cfg->stateTemplate, "{JSON}", json);
+                ap_rputs(res, r);
+                free(res);
+
+                r->status = repState == REP_WARN ? cfg->warnHttpReply : cfg->blockHttpReply;
+
+                return DONE;
+            }
+
             return repState == REP_WARN ? cfg->warnHttpReply : cfg->blockHttpReply;
         }
     }
@@ -1248,6 +1331,7 @@ static apr_status_t destroyConfig(void *dconfig) {
         free(cfg->asns.data);
         free(cfg->asnDBPath);
         free(cfg->countryDBPath);
+        free(cfg->stateTemplate);
     }
     return APR_SUCCESS;
 }
@@ -1626,6 +1710,32 @@ static const char *setBlocHttpReply(__attribute__((unused)) cmd_parms *cmd, void
     return NULL;
 }
 
+static const char *setStateTemplateFile(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
+    repudiator_config *cfg = (repudiator_config *) dconfig;
+
+    FILE *fp = fopen(value, "r");
+
+    if (fp != NULL) {
+        char source[MAX_BUF_LEN + 1];
+        size_t newLen = fread(source, sizeof(char), MAX_BUF_LEN, fp);
+        if (ferror(fp) != 0) {
+            fputs("Error reading file", stderr);
+        } else {
+            source[newLen++] = '\0';
+        }
+        fclose(fp);
+
+        cfg->stateTemplate = strdup(source);
+    } else {
+        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
+                     "Couldn't open RepudiatorStateTemplateFile for value '%s'",
+                     value);
+    }
+
+    return NULL;
+}
+
+
 static const command_rec configCmds[] = {
     AP_INIT_TAKE1("RepudiatorEnabled", setEnabled, NULL, RSRC_CONF,
                   "Enable mod_repudiator (either globally or in the virtualhost where it is specified)"),
@@ -1672,6 +1782,8 @@ static const command_rec configCmds[] = {
     AP_INIT_TAKE1("RepudiatorWarnHttpReply", setWarnHttpReply, NULL, RSRC_CONF, "Warning HTTP error code"),
 
     AP_INIT_TAKE1("RepudiatorBlockHttpReply", setBlocHttpReply, NULL, RSRC_CONF, "Blocking HTTP error code"),
+
+    AP_INIT_TAKE1("RepudiatorStateTemplateFile", setStateTemplateFile, NULL, RSRC_CONF, "State template file"),
 
     {NULL}
 };
