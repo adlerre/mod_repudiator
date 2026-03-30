@@ -1,3 +1,10 @@
+# [1.12.0](https://github.com/adlerre/mod_repudiator/compare/v1.11.2...v1.12.0) (2026-03-30)
+
+
+### Features
+
+* implemented an option to use own state template to inform about… ([#11](https://github.com/adlerre/mod_repudiator/issues/11)) ([2cd4c1d](https://github.com/adlerre/mod_repudiator/commit/2cd4c1d45c0907a9c32ac221d38aa4b963763641))
+
 ## [1.11.2](https://github.com/adlerre/mod_repudiator/compare/v1.11.1...v1.11.2) (2025-11-21)
 
 
