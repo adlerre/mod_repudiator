@@ -1,0 +1,76 @@
+{
+  "de": {
+    "title": {
+      "block": "Anfrage wurde blockiert",
+      "warn": "Anfrage wurde gedrosselt"
+    },
+    "reason": {
+      "headline" : "Begründung",
+      "asn": {
+        "headline": "ASN Block",
+        "description": "Zu viele Anfragen aus ihrem ASN Block innerhalb eines bestimmten Zeitraums."
+      },
+      "country": {
+        "headline": "Zugangspunkt",
+        "description": "Der Zugriff von ihrem Zugangspunkt ist blockiert."
+      },
+      "ip": {
+        "headline": "IP Adresse",
+        "description": "Zu viele Anfragen von Ihrer IP-Adresse innerhalb eines bestimmten Zeitraums."
+      },
+      "net": {
+        "headline": "Netzwerk Block",
+        "description": "Zu viele Anfragen aus ihrem Netzwerk Block innerhalb eines bestimmten Zeitraums."
+      },
+      "status": {
+        "headline": "HTTP status code",
+        "description": "Zu viele Anfragen, die einen bestimmten HTTP-Statuscode auf unseren Webdiensten erzeugen."
+      },
+      "ua": {
+        "headline": "Benutzeragent",
+        "description": "Wir haben einen unerwünschten Benutzeragenten festgestellt. Dies kann vorkommen, wenn Sie ein unerwünschter Bot sind oder einen sehr alten Browser und/oder ein veraltetes Betriebssystem verwenden."
+      },
+      "uri": {
+        "headline": "URI",
+        "description": "Die angeforderte URI ist ungültig."
+      }
+    }
+  },
+  "en": {
+    "title": {
+      "block": "Request was blocked",
+      "warn": "Request was throttled"
+    },
+    "reason": {
+      "headline" : "Reasons",
+      "asn": {
+        "headline": "ASN block",
+        "description": "Too many requests from their ASN block within a specific time period."
+      },
+      "country": {
+        "headline": "Access point",
+        "description": "Access from their access point is blocked."
+      },
+      "ip": {
+        "headline": "IP address",
+        "description": "Too many requests from your IP address within a specific time period."
+      },
+      "net": {
+        "headline": "Network block",
+        "description": "Too many requests from your network block within a specific time period."
+      },
+      "status": {
+        "headline": "HTTP status code",
+        "description": "Too many requests that generate a specific HTTP status code on our web services."
+      },
+      "ua": {
+        "headline": "UserAgent",
+        "description": "We have detected an unwanted user agent. This can happen if you are an unwanted bot or are using a very old browser and/or an outdated operating system."
+      },
+      "uri": {
+        "headline": "URI",
+        "description": "The requested URI is invalid."
+      }
+    }
+  }
+}

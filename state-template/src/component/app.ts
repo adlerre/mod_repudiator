@@ -1,5 +1,6 @@
 import { TitleComponent } from "./title";
 import { ReasonComponent } from "./reason";
+import { I18N } from "./i18n";
 
 export interface ReputationState {
     state: string | "warn" | "block";
@@ -27,6 +28,7 @@ export class AppComponent {
     }
 
     private initialize() {
+        const i18n = new I18N();
         const tCmp = new TitleComponent();
         const rCmp = new ReasonComponent();
         const rsElm = document.getElementById("repudiator-state");
@@ -35,34 +37,30 @@ export class AppComponent {
             try {
                 const repState: ReputationState = JSON.parse(rsElm.innerText);
 
-                if (repState.state === "warn") {
-                    document.title = "Request was throttled"
-                    tCmp.setTitle("Request was throttled");
-                } else {
-                    document.title = "Request was blocked";
-                    tCmp.setTitle("Request was blocked");
-                }
+                const title = i18n.translate("title." + repState.state);
+                document.title = title
+                tCmp.setTitle(title);
 
                 if (this.cmpFn(repState.ip, repState.warn, repState.block) || this.cmpFn(repState.perIp, repState.warn, repState.block)) {
-                    rCmp.addReason("IP address", "Too many requests from your IP address within a specific time period.");
+                    rCmp.addReason(i18n.translate("reason.ip.headline"), i18n.translate("reason.ip.description"));
                 }
                 if (this.cmpFn(repState.ip, repState.warn, repState.block) || this.cmpFn(repState.perASN, repState.warn, repState.block)) {
-                    rCmp.addReason("ASN block", "Too many requests from ASN block within a specific time period.");
+                    rCmp.addReason(i18n.translate("reason.asn.headline"), i18n.translate("reason.asn.description"));
                 }
                 if (this.cmpFn(repState.perNet, repState.warn, repState.block)) {
-                    rCmp.addReason("Network block", "Too many requests from network block within a specific time period.");
+                    rCmp.addReason(i18n.translate("reason.net.headline"), i18n.translate("reason.net.description"));
                 }
                 if (this.cmpFn(repState.ua, repState.warn, repState.block)) {
-                    rCmp.addReason("UserAgent", "We have detected an unwanted user agent. This can happen if you are an unwanted bot or are using a very old browser and/or an outdated operating system.");
+                    rCmp.addReason(i18n.translate("reason.ua.headline"), i18n.translate("reason.ua.description"));
                 }
                 if (this.cmpFn(repState.uri, repState.warn, repState.block)) {
-                    rCmp.addReason("URI", "You request a disallowed URI like /etc/passwd.");
+                    rCmp.addReason(i18n.translate("reason.uri.headline"), i18n.translate("reason.uri.description"));
                 }
                 if (this.cmpFn(repState.country, repState.warn, repState.block)) {
-                    rCmp.addReason("Country", "Your country is defined in our unwanted list.");
+                    rCmp.addReason(i18n.translate("reason.country.headline"), i18n.translate("reason.country.description"));
                 }
                 if (this.cmpFn(repState.status, repState.warn, repState.block)) {
-                    rCmp.addReason("HTTP status code", "Too many requests that generate a specific HTTP status code on our web services.");
+                    rCmp.addReason(i18n.translate("reason.status.headline"), i18n.translate("reason.status.description"));
                 }
 
                 rCmp.outputReasons();
