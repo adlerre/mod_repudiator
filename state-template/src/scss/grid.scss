@@ -29,6 +29,19 @@ $grid-size: 12 !default;
   flex: 1 0 0%;
 }
 
+@for $i from 1 through $grid-size {
+  $width: calc(100% / $grid-size * $i);
+
+  .col-#{$i} {
+    flex: 0 0 auto;
+    width: $width;
+  }
+
+  .offset-#{$i} {
+    margin-left: $width;
+  }
+}
+
 @media (min-width: 576px) {
 
   @for $i from 1 through $grid-size {

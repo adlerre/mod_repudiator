@@ -15,9 +15,16 @@
  * 59 Temple Place - Suite 330, Boston, MA  02111-1307 USA
  */
 
+export enum ReasonType {
+    WARN = "warn",
+    BLOCK = "block"
+}
+
 export interface Reason {
     headline: string;
     description: string;
+    type: ReasonType | null | undefined;
+    score: number | null | undefined;
 }
 
 export class ReasonComponent {
@@ -35,15 +42,24 @@ export class ReasonComponent {
         this.template = this.copyTemplate();
     }
 
-    public addReason(headline: string, description: string) {
-        this.reasons.push({headline, description});
+    public addReason(headline: string, description: string, type: ReasonType | null = null, score: number | null = null) {
+        this.reasons.push({headline, description, type, score});
     }
 
     public outputReasons(parent: HTMLElement | null = null) {
+        let i = 0;
+        let after: HTMLElement | null = null;
+
+        this.reasons.sort((a, b) =>
+            a.type === ReasonType.BLOCK && b.type !== ReasonType.BLOCK ? -1 :
+                a.type === b.type ? (a.score || 0) - (b.score || 0) : 0
+        );
+
         for (const reason of this.reasons) {
             const elm = this.buildReason(reason);
 
             if (elm) {
+                elm.id = "reason-" + i;
                 const p = parent || this.parent || document.body;
                 let ph: HTMLElement | null = null;
 
@@ -54,9 +70,14 @@ export class ReasonComponent {
                     }
                 }
 
-                if (ph) {
+                if (after) {
+                    p.insertBefore(elm, after.nextSibling);
+                } else if (ph) {
                     p.insertBefore(elm, ph.nextSibling);
                 }
+
+                after = elm;
+                i++;
             }
         }
     }
@@ -87,13 +108,28 @@ export class ReasonComponent {
         const reasonElm = <HTMLElement>this.template.cloneNode(true);
         reasonElm.removeAttribute("rep-reason-tmpl");
 
-        const rh = reasonElm.querySelector("[rep-reason-headline]");
-        const rb = reasonElm.querySelector("[rep-reason-body]");
-        if (rh && rb) {
-            rh.innerHTML = reason.headline;
-            rb.innerHTML = reason.description;
+        const rs = reasonElm.querySelector("[rep-reason-score]");
+        if (rs) {
+            if (reason.score) {
+                rs.innerHTML = reason.score.toFixed(1);
+                rs.removeAttribute("rep-reason-score");
+                if (reason.type) {
+                    rs.classList.add(reason.type.valueOf() === ReasonType.WARN.valueOf() ? "text-warning" : "text-danger");
+                }
+            } else {
+                rs.remove();
+            }
+        }
 
+        const rh = reasonElm.querySelector("[rep-reason-headline]");
+        if (rh) {
+            rh.innerHTML = reason.headline;
             rh.removeAttribute("rep-reason-headline");
+        }
+
+        const rb = reasonElm.querySelector("[rep-reason-body]");
+        if (rb) {
+            rb.innerHTML = reason.description;
             rb.removeAttribute("rep-reason-body");
         }
 
