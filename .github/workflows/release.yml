@@ -18,10 +18,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Semantic Release
-        uses: cycjimmy/semantic-release-action@v4
+        uses: cycjimmy/semantic-release-action@v6
         id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -39,7 +39,7 @@ jobs:
     env:
       RELEASE_VERSION: ${{ needs.semantic-release.outputs.new_release_git_tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install dependencies
         run: sudo apt -y install gcc apache2-dev libmaxminddb-dev libpcre2-dev
@@ -53,7 +53,7 @@ jobs:
         run: apxs -c -DPCRE2 -DREP_VERSION='"${{ needs.semantic-release.outputs.new_release_version }}"' -lmaxminddb -lpcre2-8 mod_repudiator.c
 
       - name: Update generated-files cache on every commit
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             .libs/mod_repudiator.so
@@ -76,7 +76,7 @@ jobs:
     env:
       RELEASE_VERSION: ${{ needs.semantic-release.outputs.new_release_git_tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install EPEL
         run: dnf -y install epel-release
@@ -96,7 +96,7 @@ jobs:
         run: apxs -c -DPCRE2 -DREP_VERSION='"${{ needs.semantic-release.outputs.new_release_version }}"' -lmaxminddb -lpcre2-8 mod_repudiator.c
 
       - name: Update generated-files cache on every commit
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             .libs/mod_repudiator.so
@@ -120,15 +120,15 @@ jobs:
       RELEASE_VERSION: ${{ needs.semantic-release.outputs.new_release_git_tag }}
     steps:
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           path: mod_repudiator
           fetch-depth: 0
 
       - name: Build Mock Environment
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           tags: mock:latest
           file: mod_repudiator/.github/workflows/Dockerfile
@@ -155,7 +155,7 @@ jobs:
           docker run --privileged --cap-add=SYS_ADMIN -t --rm -v $PWD/mod_repudiator:/root/mod_repudiator -v $PWD/mock:/var/lib/mock mock:latest sh -c "mock -r rocky+epel-${{ matrix.version }}-x86_64 --spec /root/mod_repudiator/mod_repudiator.spec --sources /root/mod_repudiator"
 
       - name: Update package cache on every commit
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: package
           key: package-rpms-${{ github.run_id }}-rl${{ matrix.version }}
@@ -170,7 +170,7 @@ jobs:
           cd ./package
 
       - name: Upload RPM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: mod_repudiator-rpms-rl${{ matrix.version }}-x86_64
           path: ./package
@@ -191,10 +191,10 @@ jobs:
     env:
       RELEASE_VERSION: ${{ needs.build-ubuntu.outputs.new_release_git_tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Update generated-files cache on every commit
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             .libs/mod_repudiator.so
@@ -202,7 +202,7 @@ jobs:
           restore-keys: generated-files
 
       - name: Update package cache on every commit
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: package
           key: package-${{ github.run_id }}-ubuntu-${{ matrix.build }}
@@ -224,7 +224,7 @@ jobs:
           cd ./package
 
       - name: Upload package.zip artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: "mod_repudiator-ubuntu-${{ matrix.build }}-${{ steps.vars.outputs.branch }}_(${{ steps.vars.outputs.sha_short }})"
           path: ./package
@@ -243,10 +243,10 @@ jobs:
     env:
       RELEASE_VERSION: ${{ needs.build-rocky.outputs.new_release_git_tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Update generated-files cache on every commit
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             .libs/mod_repudiator.so
@@ -254,7 +254,7 @@ jobs:
           restore-keys: generated-files
 
       - name: Update package cache on every commit
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: package
           key: package-${{ github.run_id }}-rl${{ matrix.version }}-${{ matrix.build }}
@@ -276,7 +276,7 @@ jobs:
           cd ./package
 
       - name: Upload package.zip artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: "mod_repudiator-rl${{ matrix.version }}-${{ matrix.build }}-${{ steps.vars.outputs.branch }}_(${{ steps.vars.outputs.sha_short }})"
           path: ./package
@@ -301,10 +301,10 @@ jobs:
       new_release_notes: ${{ needs.package-ubuntu.outputs.new_release_notes }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Update package cache on every commit
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: package
           key: package-${{ github.run_id }}-ubuntu-${{ matrix.build }}
@@ -319,7 +319,7 @@ jobs:
           zip -r ../release/mod_repudiator-ubuntu-${{ matrix.build }}-${{ needs.package-ubuntu.outputs.new_release_git_tag }}.zip .
 
       - name: Release artifacts
-        uses: softprops/action-gh-release@v2.0.8
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.package-ubuntu.outputs.new_release_git_tag }}
           name: ${{ needs.package-ubuntu.outputs.new_release_version }}
@@ -345,10 +345,10 @@ jobs:
       new_release_notes: ${{ needs.package-rocky.outputs.new_release_notes }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Update package cache on every commit
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: package
           key: package-${{ github.run_id }}-rl${{ matrix.version }}-${{ matrix.build }}
@@ -363,7 +363,7 @@ jobs:
           zip -r ../release/mod_repudiator-rl${{ matrix.version }}-${{ matrix.build }}-${{ needs.package-rocky.outputs.new_release_git_tag }}.zip .
 
       - name: Release artifacts
-        uses: softprops/action-gh-release@v2.0.8
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.package-rocky.outputs.new_release_git_tag }}
           name: ${{ needs.package-rocky.outputs.new_release_version }}
@@ -388,17 +388,17 @@ jobs:
       new_release_notes: ${{ needs.rpm-rocky.outputs.new_release_notes }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Update package cache on every commit
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: package
           key: package-rpms-${{ github.run_id }}-rl${{ matrix.version }}
           restore-keys: package
 
       - name: Release artifacts
-        uses: softprops/action-gh-release@v2.0.8
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.rpm-rocky.outputs.new_release_git_tag }}
           name: ${{ needs.rpm-rocky.outputs.new_release_version }}
