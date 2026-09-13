@@ -166,7 +166,7 @@ apxs -c -DPCRE2 -DREP_DEBUG -lmaxminddb -lpcre2-8 mod_repudiator.c
 
   Set a maximum reputation for POW Challenge.<br />
   *Example:*<br />
-  `RepudiatorPOWAboveReputation -800.0`
+  `RepudiatorPOWBelowReputation -800.0`
 
 ## Let's ban these bad guys
 
