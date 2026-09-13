@@ -5,3 +5,5 @@
 /node_modules/
 /*.l[ao]
 /*.sl[ao]
+/pow_template.c
+/state_template.c

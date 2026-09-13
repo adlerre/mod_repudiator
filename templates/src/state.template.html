@@ -27,8 +27,20 @@
     </style>
 </head>
 <body>
-<%= require("html-loader!./base.html").default %>
-<script type="text/javascript" defer="defer"><%= compilation.assets[webpackConfig.output.filename].source() %></script>
+<div class="container">
+    <a id="logo" href="https://github.com/adlerre/mod_repudiator" target="_blank"
+       title="mod_repudiator at GitHub"></a>
+    <h1 rep-title class="text-primary"></h1>
+    <h3>{{ translate("reason.headline") }}</h3>
+    <div rep-reason-tmpl class="rep-reason">
+        <div class="row">
+            <div rep-reason-headline class="rep-reason-headline col-6"></div>
+            <div rep-reason-score class="rep-reason-score col-6"></div>
+        </div>
+        <div rep-reason-body class="rep-reason-body"></div>
+    </div>
+</div>
+<script type="text/javascript" defer="defer"><%= compilation.assets[htmlWebpackPlugin.options.bundle].source() %></script>
 <script id="repudiator-state" type="application/json">{JSON}</script>
 </body>
 </html>
