@@ -247,8 +247,6 @@ static apr_table_t *parseFormData(request_rec *r);
 
 static void *reallocArray(void *ptr, size_t nmemb, size_t size);
 
-static void delay(long millis);
-
 static int startsWith(const char *str, const char *prefix);
 
 // https://stackoverflow.com/questions/779875/what-function-is-to-replace-a-substring-from-a-string-in-c
@@ -356,11 +354,6 @@ static void *reallocArray(void *ptr, const size_t nmemb, const size_t size) {
     }
 
     return realloc(ptr, nmemb * size);
-}
-
-static void delay(const long millis) {
-    const clock_t start = clock();
-    while (clock() < start + CLOCKS_PER_SEC / 1000 * millis);
 }
 
 static int startsWith(const char *str, const char *prefix) {
