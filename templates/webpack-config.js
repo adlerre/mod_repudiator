@@ -4,13 +4,29 @@ const HtmlWebpackPlugin = require("html-webpack-plugin");
 const TerserPlugin = require("terser-webpack-plugin");
 const CssMinimizerPlugin = require("css-minimizer-webpack-plugin");
 
+const entry = {
+    state: "./src/state.ts",
+    pow: "./src/pow.ts"
+};
+
+const entryHtmlPlugins = Object.keys(entry)
+    .map(function (entryName) {
+        return new HtmlWebpackPlugin({
+            title: "mod_repudiator",
+            filename: `${entryName}.html`,
+            bundle: `${entryName}.js`,
+            template: `./src/${entryName}.template.html`,
+            inject: false,
+        });
+    });
+
 module.exports = {
     context: path.resolve(__dirname),
-    entry: "./src/index.ts",
+    entry: entry,
     output: {
         path: path.resolve(__dirname, "../dist"),
         publicPath: "",
-        filename: "bundle.js"
+        filename: "[name].js"
     },
     module: {
         rules: [
@@ -74,11 +90,5 @@ module.exports = {
             },
         },
     },
-    plugins: [
-        new HtmlWebpackPlugin({
-            title: "mod_repudiator",
-            template: "./src/template.html",
-            inject: false,
-        }),
-    ]
+    plugins: [].concat(entryHtmlPlugins)
 };

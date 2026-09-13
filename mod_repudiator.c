@@ -38,6 +38,7 @@
 #include "apr.h"
 #include "apr_lib.h"
 #include "apr_strings.h"
+#include "apr_random.h"
 #include "httpd.h"
 #include "http_core.h"
 #include "http_config.h"
@@ -45,6 +46,13 @@
 #include "http_main.h"
 #include "http_request.h"
 #include "http_protocol.h"
+#include "util_cookies.h"
+
+#include "json.c"
+#include "sha256.c"
+
+#include "pow_template.c"
+#include "state_template.c"
 
 AP_DECLARE_MODULE(repudiator);
 
@@ -52,29 +60,37 @@ AP_DECLARE_MODULE(repudiator);
 #define STR(x) _STR(x)
 
 #ifndef REP_VERSION
-#define REP_VERSION                 "dev"
+#define REP_VERSION                     "dev"
 #endif
 
-#define LP_ASN                      "autonomous_system_number"
+#define LP_ASN                          "autonomous_system_number"
 
-#define REP_OK      0
-#define REP_WARN    1
-#define REP_BLOCK   2
+#define REP_OK                          0
+#define REP_WARN                        1
+#define REP_BLOCK                       2
 
-#define X_HEADER_REPUTATION         "X-Reputation"
+#define POW_PASSED_COOKIE               "REP-PASSED"
+#define POW_REDIRECT_URI                "redirect_uri"
 
-#define FIXUP_HEADERS_OUT_FILTER    "REP_FIXUP_HEADERS_OUT"
-#define FIXUP_HEADERS_ERR_FILTER    "REP_FIXUP_HEADERS_ERR"
+#define X_HEADER_REPUTATION             "X-Reputation"
 
-#define DEFAULT_EVIL_DELAY          (-1)
-#define DEFAULT_WARN_REPUTATION     (-200.0)
-#define DEFAULT_BLOCK_REPUTATION    (-400.0)
-#define DEFAULT_PER_IP_REPUTATION   (-0.033)
-#define DEFAULT_PER_NET_REPUTATION  (-0.0033)
-#define DEFAULT_PER_ASN_REPUTATION  (-0.00033)
-#define DEFAULT_SCAN_TIME           60
-#define DEFAULT_WARN_HTTP_REPLY     HTTP_TOO_MANY_REQUESTS
-#define DEFAULT_BLOCK_HTTP_REPLY    HTTP_FORBIDDEN
+#define FIXUP_HEADERS_OUT_FILTER        "REP_FIXUP_HEADERS_OUT"
+#define FIXUP_HEADERS_ERR_FILTER        "REP_FIXUP_HEADERS_ERR"
+
+#define DEFAULT_POW_URI                 "/rep-pow-challenge"
+#define DEFAULT_POW_COOKIE_MAXAGE       3600
+#define DEFAULT_POW_ABOVE_REPUTATION    (-150.0)
+#define DEFAULT_POW_BELOW_REPUTATION    (-1000.0)
+
+#define DEFAULT_EVIL_DELAY              (-1)
+#define DEFAULT_WARN_REPUTATION         (-200.0)
+#define DEFAULT_BLOCK_REPUTATION        (-400.0)
+#define DEFAULT_PER_IP_REPUTATION       (-0.033)
+#define DEFAULT_PER_NET_REPUTATION      (-0.0033)
+#define DEFAULT_PER_ASN_REPUTATION      (-0.00033)
+#define DEFAULT_SCAN_TIME               60
+#define DEFAULT_WARN_HTTP_REPLY         HTTP_TOO_MANY_REQUESTS
+#define DEFAULT_BLOCK_HTTP_REPLY        HTTP_FORBIDDEN
 
 #define MAX_BUF_LEN 1000000
 
@@ -189,10 +205,6 @@ struct req_vector {
 
 typedef struct {
     int enabled;
-    int evilMode;
-    char *evilRedirectURL;
-    int evilAppendURI;
-    long evilDelay;
     char *asnDBPath;
     char *countryDBPath;
     struct ip_vector ipReputation;
@@ -217,7 +229,56 @@ typedef struct {
     struct req_vector requests;
 
     char *stateTemplate;
+
+    char *powTemplate;
+    char *powURI;
+    int powCookieMaxAge;
+    double powAboveReputation;
+    double powBelowReputation;
 } repudiator_config;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Utils
+// --------------------------------------------------------------------------------------------------------------------
+
+static void qsToTable(const char *input, apr_table_t *parms, apr_pool_t *p);
+
+static apr_table_t *parseFormData(request_rec *r);
+
+static void *reallocArray(void *ptr, size_t nmemb, size_t size);
+
+static void delay(long millis);
+
+static int startsWith(const char *str, const char *prefix);
+
+// https://stackoverflow.com/questions/779875/what-function-is-to-replace-a-substring-from-a-string-in-c
+static char *strReplace(char *orig, char *rep, char *with);
+
+static uint32_t prefix2mask(int prefix);
+
+static void ipv6ApplyMask(struct in6_addr *restrict addr, const struct in6_addr *restrict mask);
+
+static int ipv6PrefixToMask(unsigned prefix, struct in6_addr *mask);
+
+static int isInRange(const struct ip_node *range, const struct ip_node *ipNode);
+
+static int convertAddress(const char *addr, struct ip_node *ipNode);
+
+static char const *getClientIp(request_rec *r);
+
+// --------------------------------------------------------------------------------------------------------------------
+// Reputation
+// --------------------------------------------------------------------------------------------------------------------
+
+static int parseIPReputation(struct ip_vector *ipReputation, const char *ipm, const char *rep);
+
+static int parseRegexReputation(struct re_vector *reVector, const char *regex, const char *rep);
+
+static int parseASNReputation(struct asn_vector *asnVector, const char *asn, const char *rep);
+
+static int parseCountryReputation(struct country_vector *countryVector, const char *code, const char *rep);
+
+static int parseStatusReputation(struct status_vector *statusVector, const char *ret, const char *rep);
 
 double calcIPReputation(const struct ip_vector *ipReputation, const struct ip_node *ipNode);
 
@@ -228,6 +289,65 @@ double calcASNReputation(const struct asn_vector *asnVector, u_int32_t asn);
 double calcCountryReputation(const struct country_vector *countryVector, const char *code);
 
 double calcStatusReputation(const struct status_vector *statusVector, u_int32_t status);
+
+uint32_t lookupIPInfo(MMDB_s *mmdb, struct ip_node *node);
+
+char *lookupCountryInfo(MMDB_s *mmdb, struct ip_node *node);
+
+long findRequest(const struct req_vector *requests, const struct ip_node *ip);
+
+struct req_node *addRequest(repudiator_config *cfg, const struct ip_node *ip, uint32_t asn, const char *countryCode,
+                            const char *userAgent, const char *uri, time_t timestamp);
+
+int removeRequest(struct req_vector *requests, size_t idx);
+
+long findNetwork(const struct nw_count_vector *networks, const struct ip_node *addr);
+
+int removeNetwork(struct nw_count_vector *networks, size_t idx);
+
+int incNetworkCount(struct nw_count_vector *networks, const struct ip_node *addr, time_t update, time_t scanTime);
+
+void cleanNetworks(struct nw_count_vector *networks, time_t before);
+
+long findASN(const struct asn_count_vector *asns, u_int32_t asn);
+
+int removeASN(struct asn_count_vector *asns, size_t idx);
+
+int incASNCount(struct asn_count_vector *asns, u_int32_t asn, time_t update, time_t scanTime);
+
+void cleanASNs(struct asn_count_vector *asns, time_t before);
+
+int reputationState(const repudiator_config *cfg, double reputation);
+
+double calcReputation(const repudiator_config *cfg, const struct req_node *reqNode, int type);
+
+static int accessChecker(request_rec *r);
+
+int doHeaders(const repudiator_config *cfg, request_rec *r, apr_table_t *headers);
+
+int handleStatusCode(const repudiator_config *cfg, request_rec *r);
+
+static apr_status_t headersOutputFilter(ap_filter_t *f, apr_bucket_brigade *in);
+
+static apr_status_t headersErrorFilter(ap_filter_t *f, apr_bucket_brigade *in);
+
+// --------------------------------------------------------------------------------------------------------------------
+// POW Challenge
+// --------------------------------------------------------------------------------------------------------------------
+
+static int countLeadingZeroBits(const uint8_t *hash);
+
+static void powGenerateRandomChallenge(char *challenge, size_t bytes);
+
+static int powValidateClientInfo(const char *ci);
+
+static int powCookieHandler(request_rec *r);
+
+static int powChallenge(request_rec *r);
+
+// --------------------------------------------------------------------------------------------------------------------
+// Utils
+// --------------------------------------------------------------------------------------------------------------------
 
 static void *reallocArray(void *ptr, const size_t nmemb, const size_t size) {
     if (size && nmemb > SIZE_MAX / size) {
@@ -248,8 +368,7 @@ static int startsWith(const char *str, const char *prefix) {
     return *prefix == 0;
 }
 
-// https://stackoverflow.com/questions/779875/what-function-is-to-replace-a-substring-from-a-string-in-c
-static char *str_replace(char *orig, char *rep, char *with) {
+static char *strReplace(char *orig, char *rep, char *with) {
     char *result; // the return string
     char *ins; // the next insert point
     char *tmp; // varies
@@ -293,6 +412,64 @@ static char *str_replace(char *orig, char *rep, char *with) {
     }
     strcpy(tmp, orig);
     return result;
+}
+
+static void qsToTable(const char *input, apr_table_t *parms, apr_pool_t *p) {
+    char *strtok_state;
+
+    if (input == NULL) {
+        return;
+    }
+
+    char *query_string = apr_pstrdup(p, input);
+
+    char *key = apr_strtok(query_string, "&", &strtok_state);
+    while (key) {
+        char *value = strchr(key, '=');
+        if (value) {
+            *value = '\0';
+            value++;
+        } else {
+            value = "1";
+        }
+        ap_unescape_url(key);
+        ap_unescape_url(value);
+        apr_table_set(parms, key, value);
+        key = apr_strtok(NULL, "&", &strtok_state);
+    }
+}
+
+static apr_table_t *parseFormData(request_rec *r) {
+    apr_table_t *tbl;
+    apr_array_header_t *pairs = NULL;
+    apr_off_t len;
+    apr_size_t size;
+    char *buffer;
+
+    int res = ap_parse_form_data(r, NULL, &pairs, -1, HUGE_STRING_LEN);
+    if (res != OK || !pairs) return NULL;
+
+    tbl = apr_table_make(r->pool, pairs->nelts + 1);
+
+    while (pairs && !apr_is_empty_array(pairs)) {
+        ap_form_pair_t *pair = (ap_form_pair_t *) apr_array_pop(pairs);
+        apr_brigade_length(pair->value, 1, &len);
+        size = (apr_size_t) len;
+        buffer = apr_palloc(r->pool, size + 1);
+        apr_brigade_flatten(pair->value, buffer, &size);
+        buffer[len] = 0;
+        apr_table_set(tbl, apr_pstrdup(r->pool, pair->name), buffer);
+    }
+
+    return tbl;
+}
+
+static char const *getClientIp(request_rec *r) {
+#if AP_SERVER_MAJORVERSION_NUMBER == 2 && AP_SERVER_MINORVERSION_NUMBER == 4
+    return r->useragent_ip;
+#else
+    return r->connection->remote_ip;
+#endif
 }
 
 static uint32_t prefix2mask(int prefix) {
@@ -368,6 +545,10 @@ static int convertAddress(const char *addr, struct ip_node *ipNode) {
 
     return rc;
 }
+
+// --------------------------------------------------------------------------------------------------------------------
+// Reputation
+// --------------------------------------------------------------------------------------------------------------------
 
 static int parseIPReputation(struct ip_vector *ipReputation, const char *ipm, const char *rep) {
     int rc = 0;
@@ -1024,18 +1205,15 @@ static void *createDirConf(apr_pool_t *p, __attribute__((unused)) char *context)
         .asns = (struct asn_count_vector){.data = NULL, .size = 0},
         .networks = (struct nw_count_vector){.data = NULL, .size = 0},
         .requests = (struct req_vector){.data = NULL, .size = 0},
-        .stateTemplate = NULL
+        .stateTemplate = apr_pstrdup(p, (const char *) state_html_file),
+        .powTemplate = apr_pstrdup(p, (const char *) pow_html_file),
+        .powURI = apr_pstrdup(p, DEFAULT_POW_URI),
+        .powCookieMaxAge = DEFAULT_POW_COOKIE_MAXAGE,
+        .powAboveReputation = DEFAULT_POW_ABOVE_REPUTATION,
+        .powBelowReputation = DEFAULT_POW_BELOW_REPUTATION
     };
 
     return cfg;
-}
-
-static char const *getClientIp(request_rec *r) {
-#if AP_SERVER_MAJORVERSION_NUMBER == 2 && AP_SERVER_MINORVERSION_NUMBER == 4
-    return r->useragent_ip;
-#else
-    return r->connection->remote_ip;
-#endif
 }
 
 static int accessChecker(request_rec *r) {
@@ -1065,14 +1243,40 @@ static int accessChecker(request_rec *r) {
             return OK;
         }
 
-        const double basicRep = calcReputation(cfg, req, 0);
-        const double perIPRep = calcReputation(cfg, req, 1);
-        const double perNetRep = calcReputation(cfg, req, 2);
-        const double perASNRep = calcReputation(cfg, req, 3);
+        double basicRep = calcReputation(cfg, req, 0);
+        double perIPRep = calcReputation(cfg, req, 1);
+        double perNetRep = calcReputation(cfg, req, 2);
+        double perASNRep = calcReputation(cfg, req, 3);
 
         req->reputation = basicRep + perIPRep + perNetRep + perASNRep + req->statusReputation;
 
-        const int repState = reputationState(cfg, req->reputation);
+        int repState = reputationState(cfg, req->reputation);
+
+        if (req->reputation < cfg->powAboveReputation && req->reputation >= cfg->powBelowReputation) {
+            if (powCookieHandler(r) != OK) {
+                ap_cookie_remove(r, POW_PASSED_COOKIE, NULL, r->headers_out, r->err_headers_out, NULL);
+
+                char location[HUGE_STRING_LEN] = {0};
+                snprintf(location, sizeof(location), "%s?%s=%s", cfg->powURI, POW_REDIRECT_URI, r->unparsed_uri);
+                apr_table_setn(r->headers_out, "Location", location);
+                return HTTP_MOVED_TEMPORARILY;
+            }
+
+            req->uaReputation = 0;
+            req->uriReputation = 0;
+            req->statusReputation = 0;
+            // req->countryReputation = 0;
+            // req->asnReputation = 0;
+
+            basicRep = calcReputation(cfg, req, 0);
+            perIPRep = calcReputation(cfg, req, 1);
+            perNetRep = calcReputation(cfg, req, 2);
+            perASNRep = calcReputation(cfg, req, 3);
+
+            req->reputation = basicRep + perIPRep + perNetRep + perASNRep + req->statusReputation;
+
+            repState = reputationState(cfg, req->reputation);
+        }
 
 #ifdef REP_DEBUG
         long idx = findNetwork(&cfg->networks, &addr);
@@ -1124,49 +1328,6 @@ static int accessChecker(request_rec *r) {
 #ifdef REP_DEBUG
             if (repState != REP_OK) {
 #endif
-            if (cfg->evilMode == 1 && repState == REP_BLOCK) {
-                char location[4096] = {0};
-
-                if (cfg->evilRedirectURL != NULL) {
-                    if (cfg->evilAppendURI == 1) {
-                        snprintf(location, sizeof(location), "%s%s", cfg->evilRedirectURL, r->unparsed_uri);
-                    } else {
-                        snprintf(location, sizeof(location), "%s", cfg->evilRedirectURL);
-                    }
-                } else {
-                    // send traffic to a random bad guy
-                    if (cfg->requests.size > 1) {
-                        struct req_node *rreq;
-                        size_t ec = 0;
-                        do {
-                            const size_t ridx = rand() % (cfg->requests.size + 1);
-                            rreq = &cfg->requests.data[ridx];
-                            ec++;
-                        } while (rreq->reputation < cfg->blockReputation && ec < 10);
-
-                        if (rreq->reputation > cfg->blockReputation) {
-                            req = rreq;
-                        }
-
-                        if (req->addr.family == AF_INET) {
-                            inet_ntop(AF_INET, &req->addr.ip.v4, ip, sizeof(ip));
-                            inet_ntop(AF_INET, &req->addr.mask.v4, mask, sizeof(mask));
-                        } else {
-                            inet_ntop(AF_INET6, &req->addr.ip.v6, ip, sizeof(ip));
-                            inet_ntop(AF_INET6, &req->addr.mask.v6, mask, sizeof(mask));
-                        }
-                    }
-
-                    snprintf(location, sizeof(location), req->addr.family == AF_INET ? "http://%s" : "http://[%s]", ip);
-                }
-
-                if (cfg->evilDelay > 0) {
-                    delay(cfg->evilDelay);
-                }
-
-                apr_table_setn(r->headers_out, "Location", location);
-                return HTTP_MOVED_TEMPORARILY;
-            }
 
             if (cfg->stateTemplate != NULL) {
                 char json[MAX_BUF_LEN + 1] = {0};
@@ -1190,7 +1351,7 @@ static int accessChecker(request_rec *r) {
                 );
 
                 ap_set_content_type(r, "text/html");
-                char *res = str_replace(cfg->stateTemplate, "{JSON}", json);
+                char *res = strReplace(cfg->stateTemplate, "{JSON}", json);
                 ap_rputs(res, r);
                 free(res);
 
@@ -1204,28 +1365,6 @@ static int accessChecker(request_rec *r) {
     }
 
     return ret;
-}
-
-static int preConfig(apr_pool_t *mp, apr_pool_t *mp_log, apr_pool_t *mp_temp) {
-    void *data = NULL;
-    const char *key = "repudiator-pre-config-init-flag";
-    int first_time = 0;
-
-    apr_pool_userdata_get(&data, key, mp);
-    if (data == NULL) {
-        apr_pool_userdata_set((const void *) 1, key,
-                              apr_pool_cleanup_null, mp);
-        first_time = 1;
-    }
-
-    if (!first_time) {
-        return OK;
-    }
-
-    ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, ap_server_conf, "ModRepudiator version %s",
-                 STR(REP_VERSION));
-
-    return OK;
 }
 
 int doHeaders(const repudiator_config *cfg, request_rec *r, apr_table_t *headers) {
@@ -1250,7 +1389,7 @@ int doHeaders(const repudiator_config *cfg, request_rec *r, apr_table_t *headers
                 apr_table_unset(headers, X_HEADER_REPUTATION);
             }
 
-            apr_table_add(headers, X_HEADER_REPUTATION, strdup(repStr));
+            apr_table_add(headers, X_HEADER_REPUTATION, apr_pstrdup(r->pool, repStr));
         }
     }
 
@@ -1299,6 +1438,232 @@ static apr_status_t headersErrorFilter(ap_filter_t *f, apr_bucket_brigade *in) {
     return ap_pass_brigade(f->next, in);
 }
 
+// --------------------------------------------------------------------------------------------------------------------
+// POW Challenge
+// --------------------------------------------------------------------------------------------------------------------
+
+int countLeadingZeroBits(const uint8_t *hash) {
+    int zeroBits = 0;
+
+    for (int i = 0; i < sizeof(hash); i++) {
+        if (hash[i] == 0) {
+            zeroBits += 8;
+        } else {
+            uint8_t byte = hash[i];
+            while (byte < 128) {
+                zeroBits++;
+                byte <<= 1;
+            }
+            break;
+        }
+    }
+
+    return zeroBits;
+}
+
+static void powGenerateRandomChallenge(char *challenge, const size_t bytes) {
+    srand((unsigned int) time(NULL));
+
+    for (size_t i = 0; i < bytes; i++) {
+        challenge[i] = rand();
+    }
+}
+
+static int powValidateClientInfo(const char *ci) {
+    if (ci == NULL) return DECLINED;
+
+    JsonValue *cijson = readValue(&ci);
+    if (cijson != NULL) {
+        JsonValue *webdriver = getValue(cijson, "webdriver");
+        if (webdriver != NULL &&
+            webdriver->type == TYPE_BOOL && webdriver->boolValue == 1) {
+            return DECLINED;
+        }
+
+        JsonValue *headless = getValue(cijson, "headless");
+        if (headless != NULL &&
+            headless->type == TYPE_BOOL && headless->boolValue == 1) {
+            return DECLINED;
+        }
+
+        JsonValue *cookieEnabled = getValue(cijson, "cookieEnabled");
+        if (cookieEnabled != NULL &&
+            cookieEnabled->type == TYPE_BOOL && cookieEnabled->boolValue == 0) {
+            return DECLINED;
+        }
+
+        JsonValue *hardwareConcurrency = getValue(cijson, "hardwareConcurrency");
+        if (hardwareConcurrency != NULL &&
+            hardwareConcurrency->type == TYPE_NUMBER && hardwareConcurrency->numberValue == 0) {
+            return DECLINED;
+        }
+
+        JsonValue *screenResolution = getValue(cijson, "screenResolution");
+        if (screenResolution != NULL &&
+            screenResolution->type == TYPE_STRING && strcmp("0x0", screenResolution->stringValue) == 0) {
+            return DECLINED;
+        }
+
+        JsonValue *colorDepth = getValue(cijson, "colorDepth");
+        if (colorDepth != NULL &&
+            colorDepth->type == TYPE_NUMBER && colorDepth->numberValue == 0) {
+            return DECLINED;
+        }
+    }
+
+    return OK;
+}
+
+static int powCookieHandler(request_rec *r) {
+    int ret = DECLINED;
+    const char *cookie_value = NULL;
+
+    apr_status_t status = ap_cookie_read(r, POW_PASSED_COOKIE, &cookie_value, 0);
+    if (status == APR_SUCCESS && cookie_value != NULL) {
+        const char *token = ap_pbase64decode(r->pool, cookie_value);
+        if (token != NULL) {
+            JsonValue *tjson = readValue(&token);
+            if (tjson != NULL) {
+                JsonValue *ip = getValue(tjson, "ip");
+                if (ip != NULL && ip->type == TYPE_STRING) {
+                    if (strcmp(ip->stringValue, getClientIp(r)) == 0) {
+                        ret = OK;
+                    }
+                }
+            }
+        }
+    }
+
+    return ret;
+}
+
+static int powChallenge(request_rec *r) {
+    repudiator_config *cfg = (repudiator_config *) ap_get_module_config(r->per_dir_config, &repudiator_module);
+
+    if (!r->uri || startsWith(r->uri, cfg->powURI) == 0) return (DECLINED);
+
+    if (r->method_number == M_GET) {
+        if (cfg->powTemplate != NULL) {
+            char challenge[16] = {};
+            powGenerateRandomChallenge(challenge, sizeof(challenge));
+
+            apr_table_t *tbl = apr_table_make(r->pool, 10);
+            qsToTable(r->parsed_uri.query, tbl, r->pool);
+            const char *uri = apr_table_get(tbl, POW_REDIRECT_URI);
+
+            char json[HUGE_STRING_LEN] = {0};
+
+            snprintf(
+                json,
+                sizeof(json),
+                "{\"challenge\": \"%s\", \"difficulty\": %d, \"powURI\": \"%s\", \"uri\": \"%s\"}",
+                ap_pbase64encode(r->pool, challenge),
+                16,
+                cfg->powURI,
+                uri == NULL ? "/" : uri
+            );
+
+            ap_set_content_type(r, "text/html");
+            char *res = strReplace(cfg->powTemplate, "{TOKEN}", ap_pbase64encode(r->pool, json));
+            ap_rputs(res, r);
+            free(res);
+
+            return DONE;
+        }
+    } else if (r->method_number == M_POST) {
+        const apr_table_t *formData = parseFormData(r);
+
+        if (formData != NULL) {
+            const char *et = apr_table_get(formData, "pow_challenge_token");
+            const char *ps = apr_table_get(formData, "pow_solution");
+            const char *ci = apr_table_get(formData, "information");
+
+            if (et != NULL && ps != NULL && ci != NULL) {
+                if (powValidateClientInfo(ci) != OK) {
+                    return (DECLINED);
+                }
+
+                const char *token = ap_pbase64decode(r->pool, et);
+                JsonValue *tjson = readValue(&token);
+                if (tjson != NULL) {
+                    char location[HUGE_STRING_LEN] = {0};
+                    JsonValue *challenge = getValue(tjson, "challenge");
+                    JsonValue *difficulty = getValue(tjson, "difficulty");
+                    JsonValue *uri = getValue(tjson, "uri");
+
+                    if (challenge != NULL && difficulty != NULL
+                        && challenge->type == TYPE_STRING && difficulty->type == TYPE_NUMBER) {
+                        char input[SHA256_BYTES_SIZE] = {};
+                        snprintf(input, sizeof(input), "%s%d", ap_pbase64decode(r->pool, challenge->stringValue),
+                                 atoi(ps));
+
+                        uint8_t hex[SHA256_BYTES_SIZE];
+                        sha256_bytes(input, strlen(input), hex);
+
+                        const int zeroBits = countLeadingZeroBits(hex);
+                        if (zeroBits >= difficulty->numberValue) {
+                            char cookie_val[255] = {0};
+
+                            snprintf(
+                                cookie_val,
+                                sizeof(cookie_val),
+                                "{\"ip\": \"%s\"}",
+                                getClientIp(r)
+                            );
+
+                            ap_cookie_write(r, POW_PASSED_COOKIE, ap_pbase64encode(r->pool, cookie_val),
+                                            "Path=/; HttpOnly; SameSite=lax;",
+                                            cfg->powCookieMaxAge, r->headers_out, r->err_headers_out,
+                                            NULL);
+
+                            if (uri != NULL && uri->type == TYPE_STRING
+                                && startsWith(uri->stringValue, cfg->powURI) == 0) {
+                                snprintf(location, sizeof(location), "%s", uri->stringValue);
+                            } else {
+                                snprintf(location, sizeof(location), "%s", "/");
+                            }
+                        } else {
+                            snprintf(location, sizeof(location), "%s?%s=%s", cfg->powURI, POW_REDIRECT_URI,
+                                     uri->stringValue);
+                        }
+
+                        apr_table_setn(r->headers_out, "Location", location);
+                        return HTTP_MOVED_TEMPORARILY;
+                    }
+                }
+            }
+        }
+    }
+
+    return (DECLINED);
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+// Module
+// --------------------------------------------------------------------------------------------------------------------
+
+static int preConfig(apr_pool_t *mp, apr_pool_t *mp_log, apr_pool_t *mp_temp) {
+    void *data = NULL;
+    const char *key = "repudiator-pre-config-init-flag";
+    int first_time = 0;
+
+    apr_pool_userdata_get(&data, key, mp);
+    if (data == NULL) {
+        apr_pool_userdata_set((const void *) 1, key,
+                              apr_pool_cleanup_null, mp);
+        first_time = 1;
+    }
+
+    if (!first_time) {
+        return OK;
+    }
+
+    ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, ap_server_conf, "ModRepudiator version %s",
+                 STR(REP_VERSION));
+
+    return OK;
+}
+
 static void headersInsertOutputFilter(request_rec *r) {
     ap_add_output_filter(FIXUP_HEADERS_OUT_FILTER, NULL, r, r->connection);
 }
@@ -1321,7 +1686,6 @@ static void destroyREVector(struct re_vector *vec) {
 static apr_status_t destroyConfig(void *dconfig) {
     repudiator_config *cfg = (repudiator_config *) dconfig;
     if (cfg != NULL) {
-        free(cfg->evilRedirectURL);
         free(cfg->ipReputation.data);
         destroyREVector(&cfg->uaReputation);
         destroyREVector(&cfg->uriReputation);
@@ -1332,6 +1696,8 @@ static apr_status_t destroyConfig(void *dconfig) {
         free(cfg->asnDBPath);
         free(cfg->countryDBPath);
         free(cfg->stateTemplate);
+        free(cfg->powTemplate);
+        free(cfg->powURI);
     }
     return APR_SUCCESS;
 }
@@ -1347,71 +1713,6 @@ static const char *setEnabled(__attribute__((unused)) cmd_parms *cmd, void *dcon
         ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
                      "Invalid RepudiatorEnabled value '%s', mod_repudiator disabled.", value);
         cfg->enabled = 0;
-    }
-
-    return NULL;
-}
-
-static const char *setEvilModeEnabled(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
-
-    if (!strcasecmp("true", value) || !strcasecmp("on", value)) {
-        cfg->evilMode = 1;
-    } else if (!strcasecmp("false", value) || !strcasecmp("off", value)) {
-        cfg->evilMode = 0;
-    } else {
-        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
-                     "Invalid RepudiatorEvilModeEnabled value '%s'", value);
-        cfg->evilMode = 0;
-    }
-
-    return NULL;
-}
-
-static const char *setEvilRedirectURL(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
-
-    if (startsWith(value, "http") == 1 || startsWith(value, "/") == 1) {
-        cfg->evilRedirectURL = strdup(value);
-    } else {
-        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
-                     "Invalid RepudiatorEvilRedirectURL value '%s'", value);
-        cfg->evilRedirectURL = NULL;
-    }
-
-    return NULL;
-}
-
-static const char *setEvilAppendURI(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
-
-    if (!strcasecmp("true", value) || !strcasecmp("on", value)) {
-        cfg->evilAppendURI = 1;
-    } else if (!strcasecmp("false", value) || !strcasecmp("off", value)) {
-        cfg->evilAppendURI = 0;
-    } else {
-        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
-                     "Invalid RepudiatorEvilAppendURI value '%s'", value);
-        cfg->evilAppendURI = 0;
-    }
-
-    return NULL;
-}
-
-static const char *setEvilDelay(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
-    char *endptr;
-    long n;
-
-    errno = 0;
-    n = strtol(value, &endptr, 0);
-    if (errno || *endptr != '\0') {
-        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
-                     "Invalid RepudiatorEvilDelay value '%s', using default %d.",
-                     value, DEFAULT_SCAN_TIME);
-        cfg->evilDelay = DEFAULT_EVIL_DELAY;
-    } else {
-        cfg->evilDelay = n;
     }
 
     return NULL;
@@ -1735,19 +2036,106 @@ static const char *setStateTemplateFile(__attribute__((unused)) cmd_parms *cmd, 
     return NULL;
 }
 
+static const char *setPOWUri(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
+    repudiator_config *cfg = (repudiator_config *) dconfig;
+
+    if (value != NULL && *value != '\0' && value[0] != '/') {
+        cfg->powURI = strdup(value);
+    } else {
+        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
+                     "Invalid RepudiatorPOWUri value '%s', using default %s.",
+                     value, DEFAULT_POW_URI);
+        cfg->powURI = DEFAULT_POW_URI;
+    }
+
+    return NULL;
+}
+
+static const char *setPOWTemplateFile(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
+    repudiator_config *cfg = (repudiator_config *) dconfig;
+
+    FILE *fp = fopen(value, "r");
+
+    if (fp != NULL) {
+        char source[MAX_BUF_LEN + 1];
+        size_t newLen = fread(source, sizeof(char), MAX_BUF_LEN, fp);
+        if (ferror(fp) != 0) {
+            fputs("Error reading file", stderr);
+        } else {
+            source[newLen++] = '\0';
+        }
+        fclose(fp);
+
+        cfg->powTemplate = strdup(source);
+    } else {
+        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
+                     "Couldn't open RepudiatorPOWTemplateFile for value '%s'",
+                     value);
+    }
+
+    return NULL;
+}
+
+static const char *setPOWCookieMaxAge(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
+    repudiator_config *cfg = (repudiator_config *) dconfig;
+    char *endptr;
+    long n;
+
+    errno = 0;
+    n = strtol(value, &endptr, 0);
+    if (errno || *endptr != '\0') {
+        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
+                     "Invalid RepudiatorPOWCookieMaxAge value '%s', using default %d.",
+                     value, DEFAULT_POW_COOKIE_MAXAGE);
+        cfg->powCookieMaxAge = DEFAULT_POW_COOKIE_MAXAGE;
+    } else {
+        cfg->powCookieMaxAge = n;
+    }
+
+    return NULL;
+}
+
+static const char *setPOWAboveReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
+    repudiator_config *cfg = (repudiator_config *) dconfig;
+    char *endptr;
+    double n;
+
+    errno = 0;
+    n = strtod(value, &endptr);
+    if (errno || *endptr != '\0') {
+        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
+                     "Invalid RepudiatorPOWAboveReputation value '%s', using default %4.2f.",
+                     value, DEFAULT_POW_ABOVE_REPUTATION);
+        cfg->powAboveReputation = DEFAULT_POW_ABOVE_REPUTATION;
+    } else {
+        cfg->powAboveReputation = n;
+    }
+
+    return NULL;
+}
+
+static const char *setPOWBelowReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
+    repudiator_config *cfg = (repudiator_config *) dconfig;
+    char *endptr;
+    double n;
+
+    errno = 0;
+    n = strtod(value, &endptr);
+    if (errno || *endptr != '\0') {
+        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
+                     "Invalid RepudiatorPOWNelowReputation value '%s', using default %4.2f.",
+                     value, DEFAULT_POW_BELOW_REPUTATION);
+        cfg->powBelowReputation = DEFAULT_POW_BELOW_REPUTATION;
+    } else {
+        cfg->powBelowReputation = n;
+    }
+
+    return NULL;
+}
 
 static const command_rec configCmds[] = {
     AP_INIT_TAKE1("RepudiatorEnabled", setEnabled, NULL, RSRC_CONF,
                   "Enable mod_repudiator (either globally or in the virtualhost where it is specified)"),
-
-    AP_INIT_TAKE1("RepudiatorEvilModeEnabled", setEvilModeEnabled, NULL, RSRC_CONF,
-                  "Enable evil mode - let's get mad"),
-
-    AP_INIT_TAKE1("RepudiatorEvilRedirectURL", setEvilRedirectURL, NULL, RSRC_CONF, "Set evil redirect URL"),
-
-    AP_INIT_TAKE1("RepudiatorEvilAppendURI", setEvilAppendURI, NULL, RSRC_CONF, "Enable URI append to redirectURL"),
-
-    AP_INIT_TAKE1("RepudiatorEvilDelay", setEvilDelay, NULL, RSRC_CONF, "Set evil delay in milliseconds"),
 
     AP_INIT_TAKE1("RepudiatorASNDatabase", setASNDatabase, NULL, RSRC_CONF, "Set path to Maxmind ASN database"),
 
@@ -1785,6 +2173,18 @@ static const command_rec configCmds[] = {
 
     AP_INIT_TAKE1("RepudiatorStateTemplateFile", setStateTemplateFile, NULL, RSRC_CONF, "State template file"),
 
+    AP_INIT_TAKE1("RepudiatorPOWUri", setPOWUri, NULL, RSRC_CONF, "POW URI"),
+
+    AP_INIT_TAKE1("RepudiatorPOWTemplateFile", setPOWTemplateFile, NULL, RSRC_CONF, "POW template file"),
+
+    AP_INIT_TAKE1("RepudiatorPOWCookieMaxAge", setPOWCookieMaxAge, NULL, RSRC_CONF, "POW Cookie max age"),
+
+    AP_INIT_TAKE1("RepudiatorPOWAboveReputation", setPOWAboveReputation, NULL, RSRC_CONF,
+                  "POW challenge above reputation"),
+
+    AP_INIT_TAKE1("RepudiatorPOWBelowReputation", setPOWBelowReputation, NULL, RSRC_CONF,
+                  "POW challenge below reputation"),
+
     {NULL}
 };
 
@@ -1796,6 +2196,8 @@ static void registerHooks(apr_pool_t *p) {
 
     ap_hook_insert_filter(headersInsertOutputFilter, NULL, NULL, APR_HOOK_LAST);
     ap_hook_insert_error_filter(headersInsertErrorFilter, NULL, NULL, APR_HOOK_LAST);
+
+    ap_hook_access_checker(powChallenge, NULL, NULL, APR_HOOK_FIRST - 6);
     ap_hook_access_checker(accessChecker, NULL, NULL, APR_HOOK_FIRST - 5);
 
     apr_pool_cleanup_register(p, NULL, apr_pool_cleanup_null, destroyConfig);

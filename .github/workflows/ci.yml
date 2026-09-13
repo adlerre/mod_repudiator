@@ -17,6 +17,19 @@ jobs:
           echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
           echo "branch=$(echo ${{ github.ref_name }} | tr / __)" >> $GITHUB_OUTPUT
 
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm install --force
+
+      - name: Build Templates
+        run: npm run build
+
+      - name: Build Includes
+        run: npm run pow_template && npm run state_template
+
       - name: Install dependencies
         run: sudo apt -y install gcc apache2-dev libmaxminddb-dev libpcre2-dev
 
@@ -52,6 +65,19 @@ jobs:
         run: |
           echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
           echo "branch=$(echo ${{ github.ref_name }} | tr / __)" >> $GITHUB_OUTPUT
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm install --force
+
+      - name: Build Templates
+        run: npm run build
+
+      - name: Build Includes
+        run: npm run pow_template && npm run state_template
 
       - name: Install EPEL
         run: dnf -y install epel-release
@@ -112,6 +138,31 @@ jobs:
           cd mod_repudiator
           echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
           echo "branch=$(echo ${{ github.ref_name }} | tr / __)" >> $GITHUB_OUTPUT
+          popd
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: |
+          pushd .
+          cd mod_repudiator
+          npm install --force
+          popd
+
+      - name: Build Templates
+        run:  |
+          pushd .
+          cd mod_repudiator 
+          npm run build
+          popd
+
+      - name: Build Includes
+        run:  |
+          pushd .
+          cd mod_repudiator
+          npm run pow_template && npm run state_template
           popd
 
       - name: Build RPM

@@ -1,10 +1,12 @@
 {
-  "name": "mod_repudiator-state-template",
+  "name": "mod_repudiator-templates",
   "author": "René Adler (eagle)",
   "license": "GPL-3.0",
   "scripts": {
-    "build": "webpack --config ./state-template/webpack-config.js --mode production",
-    "watch": "webpack --config ./state-template/webpack-config.js --mode development --watch"
+    "build": "webpack --config ./templates/webpack-config.js --mode production",
+    "watch": "webpack --config ./templates/webpack-config.js --mode development --watch",
+    "pow_template": "node ./hexembed.js ./dist/pow.html pow_template.c",
+    "state_template": "node ./hexembed.js ./dist/state.html state_template.c"
   },
   "private": true,
   "browser": [

@@ -42,26 +42,6 @@ apxs -c -DPCRE2 -DREP_DEBUG -lmaxminddb -lpcre2-8 mod_repudiator.c
 
   Enable module
 
-* **RepudiatorEvilModeEnabled**<br />
-  *Default:* `false`
-
-  Let's get mad!
-
-* **RepudiatorEvilRedirectURL**<br />
-  *Default:* `NULL`
-
-  Redirect the bad boy to this URL
-
-* **RepudiatorEvilAppendURI**<br />
-  *Default:* `0`
-
-  Append raw URI to redirect URL
-  
-* **RepudiatorEvilDelay**<br />
-  *Default:* `0`
-
-  Number of milliseconds to delay before sending the response.
-
 * **RepudiatorWarnReputation**<br />
   *Default:* `-200`
 
@@ -154,7 +134,39 @@ apxs -c -DPCRE2 -DREP_DEBUG -lmaxminddb -lpcre2-8 mod_repudiator.c
 
 * **RepudiatorStateTemplateFile**<br />
   
-  Path to state template file. See [example](./state-template/).
+  Path to state template file. See [example](./templates/).
+
+* **RepudiatorPOWUri**<br />
+  *Default:* `/rep-pow-challenge`
+
+  Set POW Challenge URI.<br />
+  *Example:*<br />
+  `RepudiatorPOWUri /pow-challenge`
+
+* **RepudiatorPOWTemplateFile**<br />
+
+  Path to POW template file. See [example](./templates/).
+
+* **RepudiatorPOWCookieMaxAge**<br />
+  *Default:* `3600`
+
+  Set POW cookie max age.<br />
+  *Example:*<br />
+  `RepudiatorPOWCookieMaxAge 1800`
+
+* **RepudiatorPOWAboveReputation**<br />
+  *Default:* `-150.0`
+
+  Set a minimum reputation for POW Challenge.<br />
+  *Example:*<br />
+  `RepudiatorPOWAboveReputation -200.0`
+
+* **RepudiatorPOWBelowReputation**<br />
+  *Default:* `-1000.0`
+
+  Set a maximum reputation for POW Challenge.<br />
+  *Example:*<br />
+  `RepudiatorPOWAboveReputation -800.0`
 
 ## Let's ban these bad guys
 

@@ -44,3 +44,42 @@ body {
     text-align: end;
   }
 }
+
+.spinner {
+  border: 4px solid var(--ui-body-color);
+  border-top: 4px solid var(--ui-primary);
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  animation: spin 1s linear infinite;
+  margin: 20px auto;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.status {
+  color: var(--ui-body-color);
+  margin-top: 1rem;
+}
+
+.progress {
+  background: var(--ui-body-color);
+  border-radius: 10px;
+  height: 10px;
+  margin: 20px 0;
+  overflow: hidden;
+}
+
+.progress-bar {
+  background: var(--ui-primary);
+  height: 100%;
+  width: 0%;
+  transition: width 0.3s;
+}

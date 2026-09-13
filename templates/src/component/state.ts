@@ -17,7 +17,7 @@ export interface ReputationState {
     perASN: number;
 }
 
-export class AppComponent {
+export class StateComponent {
     constructor() {
         this.initialize();
     }

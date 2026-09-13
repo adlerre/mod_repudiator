@@ -4,8 +4,14 @@
       "block": "Anfrage wurde blockiert",
       "warn": "Anfrage wurde gedrosselt"
     },
+    "pow": {
+      "calculating": "Lösung wird berechnet...",
+      "calculatingProgress": "Lösung wird berechnet... ({nonce} Versuche, {hashrate} H/s)",
+      "verifying": "Lösung gefunden! Überprüfung läuft...",
+      "error": "Ein Fehler ist aufgetreten: "
+    },
     "reason": {
-      "headline" : "Begründung",
+      "headline": "Begründung",
       "asn": {
         "headline": "ASN Block",
         "description": "Zu viele Anfragen aus ihrem ASN Block innerhalb eines bestimmten Zeitraums."
@@ -23,7 +29,7 @@
         "description": "Zu viele Anfragen aus ihrem Netzwerk Block innerhalb eines bestimmten Zeitraums."
       },
       "status": {
-        "headline": "HTTP status code",
+        "headline": "HTTP Status Code",
         "description": "Zu viele Anfragen, die einen bestimmten HTTP-Statuscode auf unseren Webdiensten erzeugen."
       },
       "ua": {
@@ -41,8 +47,14 @@
       "block": "Request was blocked",
       "warn": "Request was throttled"
     },
+    "pow": {
+      "calculating": "Calculating solution...",
+      "calculatingProgress": "Calculating solution... ({nonce} attempts, {hashrate} H/s)",
+      "verifying": "Solution found! Verifying...",
+      "error": "An error occurred: "
+    },
     "reason": {
-      "headline" : "Reasons",
+      "headline": "Reasons",
       "asn": {
         "headline": "ASN block",
         "description": "Too many requests from their ASN block within a specific time period."
