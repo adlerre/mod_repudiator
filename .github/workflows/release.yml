@@ -100,9 +100,11 @@ jobs:
       - name: Install dependencies
         run: dnf -y install gcc httpd-devel libmaxminddb-devel pcre2-devel redhat-rpm-config bash
 
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
+      - name: Enable nodejs module
+        run: dnf -y module enable nodejs:24
+
+      - name: Install nodejs
+        run: dnf -y install nodejs npm
 
       - name: Install dependencies
         run: npm install --force
