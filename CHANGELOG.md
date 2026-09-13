@@ -1,3 +1,19 @@
+# [1.13.0](https://github.com/adlerre/mod_repudiator/compare/v1.12.0...v1.13.0) (2026-09-13)
+
+
+### Bug Fixes
+
+* add missing meta tags ([2dc0b80](https://github.com/adlerre/mod_repudiator/commit/2dc0b80fcc834096a2d8638995c7198286893534))
+* template ([a065fd7](https://github.com/adlerre/mod_repudiator/commit/a065fd78adedf853583b016b84097cfbdc4a6836))
+* use Node 24 ([#12](https://github.com/adlerre/mod_repudiator/issues/12)) ([8f7a518](https://github.com/adlerre/mod_repudiator/commit/8f7a51840861dfa456cd52987ba0e11b2b31057e))
+
+
+### Features
+
+* add translations ([411ceea](https://github.com/adlerre/mod_repudiator/commit/411ceea4ffd69551e589f8f966ecce8ca153a6e6))
+* implement POW challenge ([#13](https://github.com/adlerre/mod_repudiator/issues/13)) ([d84472d](https://github.com/adlerre/mod_repudiator/commit/d84472d97cfc7e37094fc6d2811a72f80fdbb5f2))
+* output score ([3f9a3dc](https://github.com/adlerre/mod_repudiator/commit/3f9a3dc6cd77219e9abe5ecc4d6848fbb76c03b9))
+
 # [1.12.0](https://github.com/adlerre/mod_repudiator/compare/v1.11.2...v1.12.0) (2026-03-30)
 
 
