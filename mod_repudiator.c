@@ -1261,8 +1261,8 @@ static int accessChecker(request_rec *r) {
             req->uaReputation = 0;
             req->uriReputation = 0;
             req->statusReputation = 0;
-            // req->countryReputation = 0;
-            // req->asnReputation = 0;
+            req->countryReputation = 0;
+            req->asnReputation = 0;
 
             basicRep = calcReputation(cfg, req, 0);
             perIPRep = calcReputation(cfg, req, 1);
