@@ -7,6 +7,8 @@
     "pow": {
       "calculating": "Lösung wird berechnet...",
       "calculatingProgress": "Lösung wird berechnet... ({nonce} Versuche, {hashrate} H/s)",
+      "description": "Bitte warten Sie einen Moment, während wir Ihre Verbindung überprüfen...",
+      "title": "Sicherheitsüberprüfung",
       "verifying": "Lösung gefunden! Überprüfung läuft...",
       "error": "Ein Fehler ist aufgetreten: "
     },
@@ -50,6 +52,8 @@
     "pow": {
       "calculating": "Calculating solution...",
       "calculatingProgress": "Calculating solution... ({nonce} attempts, {hashrate} H/s)",
+      "description": "Please wait a moment while we verify your connection...",
+      "title": "Security Check",
       "verifying": "Solution found! Verifying...",
       "error": "An error occurred: "
     },

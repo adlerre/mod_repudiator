@@ -182,14 +182,16 @@ export class POWComponent {
 
     private async initialize() {
         const i18n = new I18N();
-        const rsElm = document.getElementById("repudiator-challenge");
+        const rcElm = document.getElementById("repudiator-challenge");
 
-        if (rsElm) {
+        if (rcElm) {
+            document.title = i18n.translate("pow.title")
+
             const sElm = document.getElementById("status");
             const pElm = document.getElementById("progressBar");
 
             try {
-                const token = rsElm.innerText;
+                const token = rcElm.innerText;
                 const payload: POWPayload = JSON.parse(atob(token));
 
                 const challenge = atob(payload.challenge);
