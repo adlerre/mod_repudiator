@@ -79,6 +79,7 @@ AP_DECLARE_MODULE(repudiator);
 
 #define DEFAULT_POW_URI                 "/rep-pow-challenge"
 #define DEFAULT_POW_COOKIE_MAXAGE       3600
+#define DEFAULT_POW_DIFFICULTY          16
 #define DEFAULT_POW_ABOVE_REPUTATION    (-150.0)
 #define DEFAULT_POW_BELOW_REPUTATION    (-1000.0)
 
@@ -232,6 +233,7 @@ typedef struct {
 
     char *powTemplate;
     char *powURI;
+    int powDifficulty;
     int powCookieMaxAge;
     double powAboveReputation;
     double powBelowReputation;
@@ -1201,6 +1203,7 @@ static void *createDirConf(apr_pool_t *p, __attribute__((unused)) char *context)
         .stateTemplate = apr_pstrdup(p, (const char *) state_html_file),
         .powTemplate = apr_pstrdup(p, (const char *) pow_html_file),
         .powURI = apr_pstrdup(p, DEFAULT_POW_URI),
+        .powDifficulty = DEFAULT_POW_DIFFICULTY,
         .powCookieMaxAge = DEFAULT_POW_COOKIE_MAXAGE,
         .powAboveReputation = DEFAULT_POW_ABOVE_REPUTATION,
         .powBelowReputation = DEFAULT_POW_BELOW_REPUTATION
@@ -1551,7 +1554,7 @@ static int powChallenge(request_rec *r) {
                 sizeof(json),
                 "{\"challenge\": \"%s\", \"difficulty\": %d, \"powURI\": \"%s\", \"uri\": \"%s\"}",
                 ap_pbase64encode(r->pool, challenge),
-                16,
+                cfg->powDifficulty,
                 cfg->powURI,
                 uri == NULL ? "/" : uri
             );
@@ -2069,6 +2072,25 @@ static const char *setPOWTemplateFile(__attribute__((unused)) cmd_parms *cmd, vo
     return NULL;
 }
 
+static const char *setPOWDifficulty(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
+    repudiator_config *cfg = (repudiator_config *) dconfig;
+    char *endptr;
+    long n;
+
+    errno = 0;
+    n = strtol(value, &endptr, 0);
+    if (errno || *endptr != '\0') {
+        ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
+                     "Invalid RepudiatorPOWDifficulty value '%s', using default %d.",
+                     value, DEFAULT_POW_DIFFICULTY);
+        cfg->powDifficulty = DEFAULT_POW_DIFFICULTY;
+    } else {
+        cfg->powDifficulty = n;
+    }
+
+    return NULL;
+}
+
 static const char *setPOWCookieMaxAge(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
     repudiator_config *cfg = (repudiator_config *) dconfig;
     char *endptr;
@@ -2169,6 +2191,8 @@ static const command_rec configCmds[] = {
     AP_INIT_TAKE1("RepudiatorPOWUri", setPOWUri, NULL, RSRC_CONF, "POW URI"),
 
     AP_INIT_TAKE1("RepudiatorPOWTemplateFile", setPOWTemplateFile, NULL, RSRC_CONF, "POW template file"),
+
+    AP_INIT_TAKE1("RepudiatorPOWDifficulty", setPOWDifficulty, NULL, RSRC_CONF, "POW Challenge difficulty"),
 
     AP_INIT_TAKE1("RepudiatorPOWCookieMaxAge", setPOWCookieMaxAge, NULL, RSRC_CONF, "POW Cookie max age"),
 

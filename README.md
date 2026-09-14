@@ -530,6 +530,22 @@ The template uses the following placeholder:
 
 The placeholder receives a Base64 encoded JSON challenge token.
 
+#### `RepudiatorPOWDifficulty`
+
+Sets the difficulty of the POW challenge.
+
+Default:
+
+```apache
+RepudiatorPOWDifficulty 16
+```
+
+Example:
+
+```apache
+RepudiatorPOWDifficulty 8
+```
+
 #### `RepudiatorPOWCookieMaxAge`
 
 Sets the lifetime of the successful POW cookie in seconds.
