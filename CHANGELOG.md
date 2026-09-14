@@ -1,3 +1,10 @@
+# [1.14.0](https://github.com/adlerre/mod_repudiator/compare/v1.13.0...v1.14.0) (2026-09-14)
+
+
+### Features
+
+* make pow challenge difficulty configurable ([#14](https://github.com/adlerre/mod_repudiator/issues/14)) ([29dfafa](https://github.com/adlerre/mod_repudiator/commit/29dfafa6660f56e794b6bec6e65a6ae02c98e00f))
+
 # [1.13.0](https://github.com/adlerre/mod_repudiator/compare/v1.12.0...v1.13.0) (2026-09-13)
 
 
