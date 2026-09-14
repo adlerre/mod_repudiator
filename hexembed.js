@@ -31,6 +31,8 @@ function toHex(data) {
     }
     u = null;
 
+    a.push("00");
+
     return a;
 }
 
@@ -53,7 +55,8 @@ try {
 
     fs.readFile(inputFile, (err, data) => {
         if (!err) {
-            const embedded = `const int ${prefix}_fsize = ${data.length};\nconst unsigned char ${prefix}_file[] = {\n${prettyPrint(toHex(data), 16, "\t")}\n};`;
+            const hex = toHex(data);
+            const embedded = `const int ${prefix}_fsize = ${hex.length};\nconst unsigned char ${prefix}_file[] = {\n${prettyPrint(hex, 16, "\t")}\n};`;
             fs.writeFileSync(outputFile, embedded, "utf8");
         }
     });
