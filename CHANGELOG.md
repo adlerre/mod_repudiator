@@ -1,3 +1,10 @@
+## [1.15.1](https://github.com/adlerre/mod_repudiator/compare/v1.15.0...v1.15.1) (2026-09-14)
+
+
+### Bug Fixes
+
+* reset country and asn reputation ([0adcf2e](https://github.com/adlerre/mod_repudiator/commit/0adcf2ef2faddc42671b883e483e55129b672030))
+
 # [1.15.0](https://github.com/adlerre/mod_repudiator/compare/v1.14.0...v1.15.0) (2026-09-14)
 
 
