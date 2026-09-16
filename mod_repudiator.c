@@ -39,6 +39,8 @@
 #include "apr_lib.h"
 #include "apr_strings.h"
 #include "apr_random.h"
+#include "apr_file_io.h"
+#include "apr_general.h"
 #include "httpd.h"
 #include "http_core.h"
 #include "http_config.h"
@@ -47,6 +49,7 @@
 #include "http_request.h"
 #include "http_protocol.h"
 #include "util_cookies.h"
+#include "ap_slotmem.h"
 
 #include "json.c"
 #include "sha256.c"
@@ -54,7 +57,7 @@
 #include "pow_template.c"
 #include "state_template.c"
 
-AP_DECLARE_MODULE(repudiator);
+module AP_MODULE_DECLARE_DATA repudiator_module;
 
 #define _STR(x) #x
 #define STR(x) _STR(x)
@@ -68,6 +71,9 @@ AP_DECLARE_MODULE(repudiator);
 #define REP_OK                          0
 #define REP_WARN                        1
 #define REP_BLOCK                       2
+
+#define REP_STATS                       "repudiator-stats"
+#define REP_STATS_MAGIC_TYPE            "application/x-rep-stats"
 
 #define POW_PASSED_COOKIE               "REP-PASSED"
 #define POW_REDIRECT_URI                "redirect_uri"
@@ -240,6 +246,29 @@ typedef struct {
 } repudiator_config;
 
 // --------------------------------------------------------------------------------------------------------------------
+// Counters
+// --------------------------------------------------------------------------------------------------------------------
+
+typedef struct {
+    unsigned long requests;
+    unsigned long blocked;
+    unsigned long warned;
+    unsigned long powRequests;
+    unsigned long powCompleted;
+    time_t updated;
+} counters_t;
+
+typedef struct {
+    apr_status_t enabled;
+    counters_t *counter;
+    apr_time_t lastUpdate;
+    apr_pool_t *pool;
+    server_rec *s;
+} repudiator_counters_t;
+
+static repudiator_counters_t *repudiator_counters = NULL;
+
+// --------------------------------------------------------------------------------------------------------------------
 // Utils
 // --------------------------------------------------------------------------------------------------------------------
 
@@ -344,6 +373,32 @@ static int powValidateClientInfo(const char *ci);
 static int powCookieHandler(request_rec *r);
 
 static int powChallenge(request_rec *r);
+
+// --------------------------------------------------------------------------------------------------------------------
+// Counters
+// --------------------------------------------------------------------------------------------------------------------
+
+static const char *statsFilename(apr_pool_t *pool);
+
+static apr_status_t statsEnabled(apr_pool_t *pool);
+
+static apr_status_t readStats(apr_pool_t *pool, counters_t *counters);
+
+static apr_status_t writeStats(apr_pool_t *pool, const counters_t *counters);
+
+static apr_status_t updateStats();
+
+static void incNumRequests();
+
+static void incNumBlocked();
+
+static void incNumWarned();
+
+static void incNumPOWRequests();
+
+static void incNumPOWCompleted();
+
+static int counterStats(request_rec *r);
 
 // --------------------------------------------------------------------------------------------------------------------
 // Utils
@@ -1213,11 +1268,15 @@ static void *createDirConf(apr_pool_t *p, __attribute__((unused)) char *context)
 }
 
 static int accessChecker(request_rec *r) {
+    if (r->handler && strcmp(r->handler, REP_STATS)) return OK;
+
     repudiator_config *cfg = (repudiator_config *) ap_get_module_config(r->per_dir_config, &repudiator_module);
 
     int ret = OK;
 
     if (cfg->enabled && r->prev == NULL && r->main == NULL) {
+        incNumRequests();
+
         apr_time_t t = r->request_time / 1000 / 1000;
 
         struct ip_node addr;
@@ -1321,6 +1380,12 @@ static int accessChecker(request_rec *r) {
                          repState == REP_OK ? "OK" : repState == REP_WARN ? "WARN" : "BLOCK", req->reputation);
 #endif
 
+            if (repState == REP_WARN) {
+                incNumWarned();
+            } else if (repState == REP_BLOCK) {
+                incNumBlocked();
+            }
+
 #ifdef REP_DEBUG
             if (repState != REP_OK) {
 #endif
@@ -1353,12 +1418,18 @@ static int accessChecker(request_rec *r) {
 
                 r->status = repState == REP_WARN ? cfg->warnHttpReply : cfg->blockHttpReply;
 
+                updateStats();
+
                 return DONE;
             }
+
+            updateStats();
 
             return repState == REP_WARN ? cfg->warnHttpReply : cfg->blockHttpReply;
         }
     }
+
+    updateStats();
 
     return ret;
 }
@@ -1564,6 +1635,8 @@ static int powChallenge(request_rec *r) {
             ap_rputs(res, r);
             free(res);
 
+            incNumPOWRequests();
+
             return DONE;
         }
     } else if (r->method_number == M_POST) {
@@ -1618,6 +1691,8 @@ static int powChallenge(request_rec *r) {
                             } else {
                                 snprintf(location, sizeof(location), "%s", "/");
                             }
+
+                            incNumPOWCompleted();
                         } else {
                             snprintf(location, sizeof(location), "%s?%s=%s", cfg->powURI, POW_REDIRECT_URI,
                                      uri->stringValue);
@@ -1635,18 +1710,180 @@ static int powChallenge(request_rec *r) {
 }
 
 // --------------------------------------------------------------------------------------------------------------------
+// Counters
+// --------------------------------------------------------------------------------------------------------------------
+static const char *statsFilename(apr_pool_t *pool) {
+    const char *fname = ap_runtime_dir_relative(pool, "repudiator_stats");
+    return fname;
+}
+
+static apr_status_t statsEnabled(apr_pool_t *pool) {
+    apr_file_t *f;
+
+    apr_int32_t flags = APR_FOPEN_CREATE | APR_FOPEN_READ | APR_FOPEN_BINARY;
+    return apr_file_open(&f, statsFilename(pool), flags,APR_FPROT_OS_DEFAULT, pool);
+}
+
+static apr_status_t readStats(apr_pool_t *pool, counters_t *counters) {
+    apr_file_t *f;
+    apr_status_t rv = APR_SUCCESS;
+
+    if (repudiator_counters != NULL && repudiator_counters->enabled == APR_SUCCESS) {
+        apr_int32_t flags = APR_FOPEN_CREATE | APR_FOPEN_READ | APR_FOPEN_BINARY;
+        if ((rv = apr_file_open(&f, statsFilename(pool), flags,APR_FPROT_OS_DEFAULT, pool)) != APR_SUCCESS) {
+            return rv;
+        }
+
+        apr_file_lock(f, APR_FLOCK_SHARED);
+
+        apr_size_t size = sizeof(counters_t);
+        apr_file_read(f, counters, &size);
+
+        apr_file_unlock(f);
+
+        apr_file_close(f);
+    }
+
+    return rv;
+}
+
+static apr_status_t writeStats(apr_pool_t *pool, const counters_t *counters) {
+    apr_file_t *f;
+    apr_status_t rv = APR_SUCCESS;
+
+    if (repudiator_counters != NULL && repudiator_counters->enabled == APR_SUCCESS) {
+        apr_int32_t flags = APR_FOPEN_CREATE | APR_FOPEN_WRITE | APR_FOPEN_BINARY;
+        if ((rv = apr_file_open(&f, statsFilename(pool), flags,APR_FPROT_OS_DEFAULT, pool)) != APR_SUCCESS) {
+            return rv;
+        }
+
+        apr_file_lock(f, APR_FLOCK_EXCLUSIVE);
+
+        apr_size_t size = sizeof(counters_t);
+        apr_file_write(f, counters, &size);
+
+        apr_file_unlock(f);
+
+        apr_file_close(f);
+    }
+
+    return rv;
+}
+
+static apr_status_t updateStats() {
+    apr_status_t rv = APR_SUCCESS;
+
+    if (repudiator_counters != NULL && repudiator_counters->enabled == APR_SUCCESS
+        && (repudiator_counters->lastUpdate == 0 || apr_time_now() - repudiator_counters->lastUpdate > 1000 * 1000)) {
+        counters_t *counters = apr_palloc(repudiator_counters->pool, sizeof(counters_t));
+        if (counters == NULL) {
+            return APR_ENOMEM;
+        }
+
+        *counters = (counters_t){
+            .requests = 0,
+            .blocked = 0,
+            .warned = 0,
+            .powRequests = 0,
+            .powCompleted = 0
+        };
+
+        if ((rv = readStats(repudiator_counters->pool, counters)) != APR_SUCCESS) {
+            return rv;
+        }
+
+        counters->requests += repudiator_counters->counter->requests;
+        counters->blocked += repudiator_counters->counter->blocked;
+        counters->warned += repudiator_counters->counter->warned;
+        counters->powRequests += repudiator_counters->counter->powRequests;
+        counters->powCompleted += repudiator_counters->counter->powCompleted;
+        counters->updated = time(NULL);
+
+        if ((rv = writeStats(repudiator_counters->pool, counters)) == APR_SUCCESS) {
+            *repudiator_counters->counter = (counters_t){
+                .requests = 0,
+                .blocked = 0,
+                .warned = 0,
+                .powRequests = 0,
+                .powCompleted = 0
+            };
+
+            repudiator_counters->lastUpdate = apr_time_now();
+        }
+    }
+
+    return rv;
+}
+
+static void incNumRequests() {
+    if (repudiator_counters != NULL) {
+        repudiator_counters->counter->requests++;
+    }
+}
+
+static void incNumBlocked() {
+    if (repudiator_counters != NULL) {
+        repudiator_counters->counter->blocked++;
+    }
+}
+
+static void incNumWarned() {
+    if (repudiator_counters != NULL) {
+        repudiator_counters->counter->warned++;
+    }
+}
+
+static void incNumPOWRequests() {
+    if (repudiator_counters != NULL) {
+        repudiator_counters->counter->powRequests++;
+    }
+}
+
+static void incNumPOWCompleted() {
+    if (repudiator_counters != NULL) {
+        repudiator_counters->counter->powCompleted++;
+    }
+}
+
+static int counterStats(request_rec *r) {
+    if (strcmp(r->handler, REP_STATS_MAGIC_TYPE) && strcmp(r->handler, REP_STATS)) {
+        return DECLINED;
+    }
+
+    if (repudiator_counters->enabled != APR_SUCCESS) {
+        return HTTP_NOT_FOUND;
+    }
+
+    if (r->method_number == M_GET) {
+        ap_set_content_type(r, "application/json");
+
+        counters_t *counters = apr_palloc(repudiator_counters->pool, sizeof(counters_t));
+        readStats(repudiator_counters->pool, counters);
+
+        ap_rprintf(r,
+                   "{\"requests\": %lu, \"blocked\": %lu, \"warned\": %lu, \"powRequests\": %lu, \"powCompleted\": %lu, \"updated\": %lu}\n",
+                   counters->requests, counters->blocked, counters->warned, counters->powRequests,
+                   counters->powCompleted, counters->updated
+        );
+
+        return DONE;
+    }
+
+    return DECLINED;
+}
+
+// --------------------------------------------------------------------------------------------------------------------
 // Module
 // --------------------------------------------------------------------------------------------------------------------
 
-static int preConfig(apr_pool_t *mp, apr_pool_t *mp_log, apr_pool_t *mp_temp) {
+static int preConfigHook(apr_pool_t *mp, apr_pool_t *mp_log, apr_pool_t *mp_temp) {
     void *data = NULL;
     const char *key = "repudiator-pre-config-init-flag";
     int first_time = 0;
 
     apr_pool_userdata_get(&data, key, mp);
     if (data == NULL) {
-        apr_pool_userdata_set((const void *) 1, key,
-                              apr_pool_cleanup_null, mp);
+        apr_pool_userdata_set((const void *) 1, key, apr_pool_cleanup_null, mp);
         first_time = 1;
     }
 
@@ -1654,8 +1891,39 @@ static int preConfig(apr_pool_t *mp, apr_pool_t *mp_log, apr_pool_t *mp_temp) {
         return OK;
     }
 
-    ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, ap_server_conf, "ModRepudiator version %s",
-                 STR(REP_VERSION));
+    ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, ap_server_conf, "ModRepudiator version %s", STR(REP_VERSION));
+
+    return OK;
+}
+
+static int postConfigHook(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp, server_rec *s) {
+    const char *pk = "repudiator_init_module_tag";
+    apr_pool_t *pproc = s->process->pool;
+
+    if (ap_state_query(AP_SQ_MAIN_STATE) == AP_SQ_MS_CREATE_PRE_CONFIG) {
+        return OK;
+    }
+
+    apr_pool_userdata_get((void *) &repudiator_counters, pk, pproc);
+    if (!repudiator_counters) {
+        if (!(repudiator_counters = apr_pcalloc(pproc, sizeof(repudiator_counters_t))))
+            return APR_ENOMEM;
+
+        if (!(repudiator_counters->counter = apr_pcalloc(pproc, sizeof(counters_t))))
+            return APR_ENOMEM;
+
+        apr_pool_create(&repudiator_counters->pool, pproc);
+
+        repudiator_counters->enabled = statsEnabled(repudiator_counters->pool);
+        if (repudiator_counters->enabled != APR_SUCCESS) {
+            ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
+                         "Couldn't access repudiator stats file '%s'. Create it manual.",
+                         statsFilename(repudiator_counters->pool));
+        }
+
+        apr_pool_userdata_set(repudiator_counters, pk, apr_pool_cleanup_null, pproc);
+    }
+    repudiator_counters->s = s;
 
     return OK;
 }
@@ -2138,7 +2406,7 @@ static const char *setPOWBelowReputation(__attribute__((unused)) cmd_parms *cmd,
     n = strtod(value, &endptr);
     if (errno || *endptr != '\0') {
         ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
-                     "Invalid RepudiatorPOWNelowReputation value '%s', using default %4.2f.",
+                     "Invalid RepudiatorPOWBelowReputation value '%s', using default %4.2f.",
                      value, DEFAULT_POW_BELOW_REPUTATION);
         cfg->powBelowReputation = DEFAULT_POW_BELOW_REPUTATION;
     } else {
@@ -2206,7 +2474,8 @@ static const command_rec configCmds[] = {
 };
 
 static void registerHooks(apr_pool_t *p) {
-    ap_hook_pre_config(preConfig, NULL, NULL, APR_HOOK_FIRST);
+    ap_hook_pre_config(preConfigHook, NULL, NULL, APR_HOOK_FIRST);
+    ap_hook_post_config(postConfigHook,NULL,NULL,APR_HOOK_LAST);
 
     ap_register_output_filter(FIXUP_HEADERS_OUT_FILTER, headersOutputFilter,NULL, AP_FTYPE_CONTENT_SET);
     ap_register_output_filter(FIXUP_HEADERS_ERR_FILTER, headersErrorFilter,NULL, AP_FTYPE_CONTENT_SET);
@@ -2214,13 +2483,15 @@ static void registerHooks(apr_pool_t *p) {
     ap_hook_insert_filter(headersInsertOutputFilter, NULL, NULL, APR_HOOK_LAST);
     ap_hook_insert_error_filter(headersInsertErrorFilter, NULL, NULL, APR_HOOK_LAST);
 
+    ap_hook_handler(counterStats, NULL, NULL, APR_HOOK_FIRST - 6);
+
     ap_hook_access_checker(powChallenge, NULL, NULL, APR_HOOK_FIRST - 6);
     ap_hook_access_checker(accessChecker, NULL, NULL, APR_HOOK_FIRST - 5);
 
     apr_pool_cleanup_register(p, NULL, apr_pool_cleanup_null, destroyConfig);
-};
+}
 
-module AP_MODULE_DECLARE_DATA repudiator_module = {
+AP_DECLARE_MODULE(repudiator) = {
     STANDARD20_MODULE_STUFF,
     createDirConf,
     NULL,
