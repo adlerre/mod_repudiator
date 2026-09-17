@@ -1390,7 +1390,7 @@ static int accessChecker(request_rec *r) {
             if (repState != REP_OK) {
 #endif
 
-            if (cfg->stateTemplate != NULL) {
+            if (cfg->stateTemplate != NULL && !r->header_only) {
                 char json[MAX_BUF_LEN + 1] = {0};
 
                 snprintf(
@@ -1427,9 +1427,9 @@ static int accessChecker(request_rec *r) {
 
             return repState == REP_WARN ? cfg->warnHttpReply : cfg->blockHttpReply;
         }
-    }
 
-    updateStats();
+        updateStats();
+    }
 
     return ret;
 }
