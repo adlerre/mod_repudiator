@@ -1,3 +1,10 @@
+## [1.18.1](https://github.com/adlerre/mod_repudiator/compare/v1.18.0...v1.18.1) (2026-09-17)
+
+
+### Bug Fixes
+
+* add file lock checks ([46f40bc](https://github.com/adlerre/mod_repudiator/commit/46f40bcff9c3617f1395ed64989d24f24220144a))
+
 # [1.18.0](https://github.com/adlerre/mod_repudiator/compare/v1.17.0...v1.18.0) (2026-09-17)
 
 
