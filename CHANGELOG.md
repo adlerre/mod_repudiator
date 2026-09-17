@@ -1,3 +1,10 @@
+## [1.16.1](https://github.com/adlerre/mod_repudiator/compare/v1.16.0...v1.16.1) (2026-09-17)
+
+
+### Bug Fixes
+
+* don't check handler ([9ef8cb6](https://github.com/adlerre/mod_repudiator/commit/9ef8cb6faa43077d42780d24d9ed066af3832816))
+
 # [1.16.0](https://github.com/adlerre/mod_repudiator/compare/v1.15.1...v1.16.0) (2026-09-17)
 
 
