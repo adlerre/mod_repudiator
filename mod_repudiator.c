@@ -1718,10 +1718,20 @@ static const char *statsFilename(apr_pool_t *pool) {
 }
 
 static apr_status_t statsEnabled(apr_pool_t *pool) {
+    apr_status_t rv = APR_SUCCESS;
     apr_file_t *f;
 
-    apr_int32_t flags = APR_FOPEN_CREATE | APR_FOPEN_READ | APR_FOPEN_BINARY;
-    return apr_file_open(&f, statsFilename(pool), flags,APR_FPROT_OS_DEFAULT, pool);
+    const char *fname = statsFilename(pool);
+    const apr_int32_t flags = APR_FOPEN_CREATE | APR_FOPEN_READ | APR_FOPEN_WRITE | APR_FOPEN_BINARY |
+                              APR_FOPEN_XTHREAD;
+    if ((rv = apr_file_open(&f, fname, flags, APR_FPROT_OS_DEFAULT, pool)) == APR_SUCCESS) {
+        apr_file_close(f);
+        apr_file_perms_set(fname, APR_FPROT_UREAD | APR_FPROT_UWRITE |
+                                  APR_FPROT_GREAD | APR_FPROT_GWRITE |
+                                  APR_FPROT_WREAD | APR_FPROT_WWRITE);
+    }
+
+    return rv;
 }
 
 static apr_status_t readStats(apr_pool_t *pool, counters_t *counters) {
@@ -1729,8 +1739,8 @@ static apr_status_t readStats(apr_pool_t *pool, counters_t *counters) {
     apr_status_t rv = APR_SUCCESS;
 
     if (repudiator_counters != NULL && repudiator_counters->enabled == APR_SUCCESS) {
-        apr_int32_t flags = APR_FOPEN_CREATE | APR_FOPEN_READ | APR_FOPEN_BINARY;
-        if ((rv = apr_file_open(&f, statsFilename(pool), flags,APR_FPROT_OS_DEFAULT, pool)) != APR_SUCCESS) {
+        const apr_int32_t flags = APR_FOPEN_CREATE | APR_FOPEN_READ | APR_FOPEN_BINARY | APR_FOPEN_XTHREAD;
+        if ((rv = apr_file_open(&f, statsFilename(pool), flags, APR_FPROT_OS_DEFAULT, pool)) != APR_SUCCESS) {
             return rv;
         }
 
@@ -1752,8 +1762,8 @@ static apr_status_t writeStats(apr_pool_t *pool, const counters_t *counters) {
     apr_status_t rv = APR_SUCCESS;
 
     if (repudiator_counters != NULL && repudiator_counters->enabled == APR_SUCCESS) {
-        apr_int32_t flags = APR_FOPEN_CREATE | APR_FOPEN_WRITE | APR_FOPEN_BINARY;
-        if ((rv = apr_file_open(&f, statsFilename(pool), flags,APR_FPROT_OS_DEFAULT, pool)) != APR_SUCCESS) {
+        const apr_int32_t flags = APR_FOPEN_CREATE | APR_FOPEN_WRITE | APR_FOPEN_BINARY | APR_FOPEN_XTHREAD;
+        if ((rv = apr_file_open(&f, statsFilename(pool), flags, APR_FPROT_OS_DEFAULT, pool)) != APR_SUCCESS) {
             return rv;
         }
 
