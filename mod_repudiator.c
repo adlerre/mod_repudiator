@@ -1268,8 +1268,6 @@ static void *createDirConf(apr_pool_t *p, __attribute__((unused)) char *context)
 }
 
 static int accessChecker(request_rec *r) {
-    if (r->handler && strcmp(r->handler, REP_STATS)) return OK;
-
     repudiator_config *cfg = (repudiator_config *) ap_get_module_config(r->per_dir_config, &repudiator_module);
 
     int ret = OK;
