@@ -364,7 +364,7 @@ static apr_status_t headersErrorFilter(ap_filter_t *f, apr_bucket_brigade *in);
 // POW Challenge
 // --------------------------------------------------------------------------------------------------------------------
 
-static int countLeadingZeroBits(const uint8_t *hash);
+static int countLeadingZeroBits(const uint8_t *hash, size_t nbytes);
 
 static void powGenerateRandomChallenge(char *challenge, size_t bytes);
 
@@ -422,10 +422,10 @@ static char *strReplace(char *orig, char *rep, char *with) {
     char *result; // the return string
     char *ins; // the next insert point
     char *tmp; // varies
-    int len_rep; // length of rep (the string to remove)
-    int len_with; // length of with (the string to replace rep with)
-    int len_front; // distance between rep and end of last rep
-    int count; // number of replacements
+    size_t len_rep; // length of rep (the string to remove)
+    size_t len_with; // length of with (the string to replace rep with)
+    size_t len_front; // distance between rep and end of last rep
+    size_t count; // number of replacements
 
     // sanity checks and initialization
     if (!orig || !rep)
@@ -622,11 +622,16 @@ static int parseIPReputation(struct ip_vector *ipReputation, const char *ipm, co
             }
 
             if (m == 0) {
-                addr[pos] = ipm[i];
+                if (pos < sizeof(addr) - 1) {
+                    addr[pos] = ipm[i];
+                    ++pos;
+                }
             } else {
-                mask[pos] = ipm[i];
+                if (pos < sizeof(mask) - 1) {
+                    mask[pos] = ipm[i];
+                    ++pos;
+                }
             }
-            ++pos;
             ++n;
         } else {
             break;
@@ -704,6 +709,8 @@ static int parseRegexReputation(struct re_vector *reVector, const char *regex, c
 
             struct re_node *node = reallocArray(reVector->data, reVector->size + 1, sizeof(*(reVector->data)));
             if (!node) {
+                pcre2_match_data_free(match_data);
+                pcre2_code_free(re);
                 return -1;
             }
 
@@ -919,7 +926,10 @@ uint32_t lookupIPInfo(MMDB_s *mmdb, struct ip_node *node) {
 
                 MMDB_entry_data_s entry_data;
 
-                const char **lookup_path = calloc(1, sizeof(const char *));
+                const char **lookup_path = calloc(1, sizeof(*lookup_path));
+                if (lookup_path == NULL) {
+                    return 0;
+                }
                 lookup_path[0] = LP_ASN;
 
                 mmdb_error = MMDB_aget_value(&lookup_result.entry, &entry_data, lookup_path);
@@ -962,7 +972,10 @@ char *lookupCountryInfo(MMDB_s *mmdb, struct ip_node *node) {
             if (lookup_result.found_entry) {
                 MMDB_entry_data_s entry_data;
 
-                const char **lookup_path = calloc(2, sizeof(const char *));
+                const char **lookup_path = calloc(2, sizeof(*lookup_path));
+                if (lookup_path == NULL) {
+                    return NULL;
+                }
                 lookup_path[0] = "country";
                 lookup_path[1] = "iso_code";
 
@@ -998,6 +1011,10 @@ long findRequest(const struct req_vector *requests, const struct ip_node *ip) {
 struct req_node *addRequest(repudiator_config *cfg, const struct ip_node *ip, const uint32_t asn,
                             const char *countryCode, const char *userAgent,
                             const char *uri, const time_t timestamp) {
+    if (cfg == NULL || ip == NULL) {
+        return NULL;
+    }
+
     const long idx = findRequest(&cfg->requests, ip);
     if (idx == -1) {
         struct req_node *node = reallocArray(cfg->requests.data, cfg->requests.size + 1, sizeof(*(cfg->requests.data)));
@@ -1026,6 +1043,9 @@ struct req_node *addRequest(repudiator_config *cfg, const struct ip_node *ip, co
     struct req_node *node = &cfg->requests.data[idx];
 
     if (node->lastSeen > timestamp - cfg->scanTime) {
+        if (node->count == SIZE_MAX) {
+            return NULL;
+        }
         node->count++;
         node->ipReputation += calcIPReputation(&cfg->ipReputation, ip);
         node->uaReputation += calcRegexReputation(&cfg->uaReputation, userAgent);
@@ -1046,15 +1066,26 @@ struct req_node *addRequest(repudiator_config *cfg, const struct ip_node *ip, co
 }
 
 int removeRequest(struct req_vector *requests, const size_t idx) {
-    for (size_t i = idx; i < requests->size - 1; ++i) {
-        requests->data[i] = requests->data[i + 1];
-    }
-    struct req_node *tmp = reallocArray(requests->data, requests->size - 1, sizeof(*(requests->data)));
-    if (tmp == NULL && requests->size > 1) {
+    if (requests == NULL || idx >= requests->size || requests->data == NULL) {
         return -1;
     }
-    requests->data = tmp;
-    requests->size--;
+    free(requests->data[idx].countryCode);
+    requests->data[idx].countryCode = NULL;
+    for (size_t i = idx; i + 1 < requests->size; ++i) {
+        requests->data[i] = requests->data[i + 1];
+    }
+    --requests->size;
+    if (requests->size == 0) {
+        free(requests->data);
+        requests->data = NULL;
+        return 0;
+    }
+
+    /* Shrinking is an optimization only; failure must not corrupt the live vector. */
+    void *tmp = reallocArray(requests->data, requests->size, sizeof(*(requests->data)));
+    if (tmp != NULL) {
+        requests->data = tmp;
+    }
     return 0;
 }
 
@@ -1073,15 +1104,24 @@ long findNetwork(const struct nw_count_vector *networks, const struct ip_node *a
 }
 
 int removeNetwork(struct nw_count_vector *networks, const size_t idx) {
-    for (size_t i = idx; i < networks->size - 1; ++i) {
-        networks->data[i] = networks->data[i + 1];
-    }
-    struct nw_count *tmp = reallocArray(networks->data, networks->size - 1, sizeof(*(networks->data)));
-    if (tmp == NULL && networks->size > 1) {
+    if (networks == NULL || idx >= networks->size || networks->data == NULL) {
         return -1;
     }
-    networks->data = tmp;
-    networks->size--;
+    for (size_t i = idx; i + 1 < networks->size; ++i) {
+        networks->data[i] = networks->data[i + 1];
+    }
+    --networks->size;
+    if (networks->size == 0) {
+        free(networks->data);
+        networks->data = NULL;
+        return 0;
+    }
+
+    /* Shrinking is an optimization only; failure must not corrupt the live vector. */
+    void *tmp = reallocArray(networks->data, networks->size, sizeof(*(networks->data)));
+    if (tmp != NULL) {
+        networks->data = tmp;
+    }
     return 0;
 }
 
@@ -1139,15 +1179,24 @@ long findASN(const struct asn_count_vector *asns, const u_int32_t asn) {
 }
 
 int removeASN(struct asn_count_vector *asns, const size_t idx) {
-    for (size_t i = idx; i < asns->size - 1; ++i) {
-        asns->data[i] = asns->data[i + 1];
-    }
-    struct asn_count *tmp = reallocArray(asns->data, asns->size - 1, sizeof(*(asns->data)));
-    if (tmp == NULL && asns->size > 1) {
+    if (asns == NULL || idx >= asns->size || asns->data == NULL) {
         return -1;
     }
-    asns->data = tmp;
-    asns->size--;
+    for (size_t i = idx; i + 1 < asns->size; ++i) {
+        asns->data[i] = asns->data[i + 1];
+    }
+    --asns->size;
+    if (asns->size == 0) {
+        free(asns->data);
+        asns->data = NULL;
+        return 0;
+    }
+
+    /* Shrinking is an optimization only; failure must not corrupt the live vector. */
+    void *tmp = reallocArray(asns->data, asns->size, sizeof(*(asns->data)));
+    if (tmp != NULL) {
+        asns->data = tmp;
+    }
     return 0;
 }
 
@@ -1226,45 +1275,6 @@ double calcReputation(const repudiator_config *cfg, const struct req_node *reqNo
             return (reqNode->ipReputation + reqNode->uaReputation + reqNode->uriReputation + reqNode->asnReputation +
                     reqNode->countryReputation) / (double) reqNode->count;
     }
-}
-
-static void *createDirConf(apr_pool_t *p, __attribute__((unused)) char *context) {
-    repudiator_config *cfg = apr_palloc(p, sizeof(repudiator_config));
-    if (!cfg) {
-        ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "Failed to allocate configuration");
-        return NULL;
-    }
-
-    *cfg = (repudiator_config){
-        .enabled = 0,
-        .asnDBPath = NULL,
-        .countryDBPath = NULL,
-        .ipReputation = (struct ip_vector){.data = NULL, .size = 0},
-        .uaReputation = (struct re_vector){.data = NULL, .size = 0},
-        .uriReputation = (struct re_vector){.data = NULL, .size = 0},
-        .asnReputation = (struct asn_vector){.data = NULL, .size = 0},
-        .countryReputation = (struct country_vector){.data = NULL, .size = 0},
-        .warnReputation = DEFAULT_WARN_REPUTATION,
-        .blockReputation = DEFAULT_BLOCK_REPUTATION,
-        .perIPReputation = DEFAULT_PER_IP_REPUTATION,
-        .perNetworkReputation = DEFAULT_PER_NET_REPUTATION,
-        .perASNReputation = DEFAULT_PER_ASN_REPUTATION,
-        .scanTime = DEFAULT_SCAN_TIME,
-        .warnHttpReply = DEFAULT_WARN_HTTP_REPLY,
-        .blockHttpReply = DEFAULT_BLOCK_HTTP_REPLY,
-        .asns = (struct asn_count_vector){.data = NULL, .size = 0},
-        .networks = (struct nw_count_vector){.data = NULL, .size = 0},
-        .requests = (struct req_vector){.data = NULL, .size = 0},
-        .stateTemplate = apr_pstrdup(p, (const char *) state_html_file),
-        .powTemplate = apr_pstrdup(p, (const char *) pow_html_file),
-        .powURI = apr_pstrdup(p, DEFAULT_POW_URI),
-        .powDifficulty = DEFAULT_POW_DIFFICULTY,
-        .powCookieMaxAge = DEFAULT_POW_COOKIE_MAXAGE,
-        .powAboveReputation = DEFAULT_POW_ABOVE_REPUTATION,
-        .powBelowReputation = DEFAULT_POW_BELOW_REPUTATION
-    };
-
-    return cfg;
 }
 
 static int accessChecker(request_rec *r) {
@@ -1509,10 +1519,10 @@ static apr_status_t headersErrorFilter(ap_filter_t *f, apr_bucket_brigade *in) {
 // POW Challenge
 // --------------------------------------------------------------------------------------------------------------------
 
-int countLeadingZeroBits(const uint8_t *hash) {
+int countLeadingZeroBits(const uint8_t *hash, size_t nbytes) {
     int zeroBits = 0;
 
-    for (int i = 0; i < sizeof(hash); i++) {
+    for (int i = 0; i < nbytes; i++) {
         if (hash[i] == 0) {
             zeroBits += 8;
         } else {
@@ -1529,11 +1539,16 @@ int countLeadingZeroBits(const uint8_t *hash) {
 }
 
 static void powGenerateRandomChallenge(char *challenge, const size_t bytes) {
+    if (challenge == NULL || bytes == 0) {
+        return;
+    }
+
     srand((unsigned int) time(NULL));
 
-    for (size_t i = 0; i < bytes; i++) {
+    for (size_t i = 0; i < bytes - 1; i++) {
         challenge[i] = rand();
     }
+    challenge[bytes - 1] = '\0';
 }
 
 static int powValidateClientInfo(const char *ci) {
@@ -1611,7 +1626,7 @@ static int powChallenge(request_rec *r) {
 
     if (r->method_number == M_GET) {
         if (cfg->powTemplate != NULL) {
-            char challenge[16] = {};
+            char challenge[17] = {};
             powGenerateRandomChallenge(challenge, sizeof(challenge));
 
             apr_table_t *tbl = apr_table_make(r->pool, 10);
@@ -1669,7 +1684,7 @@ static int powChallenge(request_rec *r) {
                         uint8_t hex[SHA256_BYTES_SIZE];
                         sha256_bytes(input, strlen(input), hex);
 
-                        const int zeroBits = countLeadingZeroBits(hex);
+                        const int zeroBits = countLeadingZeroBits(hex, SHA256_BYTES_SIZE);
                         if (zeroBits >= difficulty->numberValue) {
                             char cookie_val[255] = {0};
 
@@ -1793,7 +1808,10 @@ static apr_status_t updateStats() {
 
     if (repudiator_counters != NULL && repudiator_counters->enabled == APR_SUCCESS
         && (repudiator_counters->lastUpdate == 0 || apr_time_now() - repudiator_counters->lastUpdate > 1000 * 1000)) {
-        counters_t *counters = apr_palloc(repudiator_counters->pool, sizeof(counters_t));
+        apr_pool_t *pool;
+        apr_pool_create(&pool, repudiator_counters->pool);
+
+        counters_t *counters = apr_palloc(pool, sizeof(counters_t));
         if (counters == NULL) {
             return APR_ENOMEM;
         }
@@ -1806,7 +1824,8 @@ static apr_status_t updateStats() {
             .powCompleted = 0
         };
 
-        if ((rv = readStats(repudiator_counters->pool, counters)) != APR_SUCCESS) {
+        if ((rv = readStats(pool, counters)) != APR_SUCCESS) {
+            apr_pool_destroy(pool);
             return rv;
         }
 
@@ -1817,7 +1836,7 @@ static apr_status_t updateStats() {
         counters->powCompleted += repudiator_counters->counter->powCompleted;
         counters->updated = time(NULL);
 
-        if ((rv = writeStats(repudiator_counters->pool, counters)) == APR_SUCCESS) {
+        if ((rv = writeStats(pool, counters)) == APR_SUCCESS) {
             *repudiator_counters->counter = (counters_t){
                 .requests = 0,
                 .blocked = 0,
@@ -1828,6 +1847,8 @@ static apr_status_t updateStats() {
 
             repudiator_counters->lastUpdate = apr_time_now();
         }
+
+        apr_pool_destroy(pool);
     }
 
     return rv;
@@ -1961,17 +1982,32 @@ static void destroyREVector(struct re_vector *vec) {
         pcre2_code_free(node->re);
         pcre2_match_data_free(node->match_data);
     }
+#else
+    for (size_t i = 0; i < vec->size; i++) {
+        regfree(&vec->data[i].re);
+    }
 #endif
     free(vec->data);
 }
 
 static apr_status_t destroyConfig(void *dconfig) {
     repudiator_config *cfg = (repudiator_config *) dconfig;
+
     if (cfg != NULL) {
         free(cfg->ipReputation.data);
         destroyREVector(&cfg->uaReputation);
         destroyREVector(&cfg->uriReputation);
         free(cfg->asnReputation.data);
+        free(cfg->statusReputation.data);
+
+        for (size_t i = 0; i < cfg->countryReputation.size; i++) {
+            free(cfg->countryReputation.data[i].code);
+        }
+        free(cfg->countryReputation.data);
+
+        for (size_t i = 0; i < cfg->requests.size; ++i) {
+            free(cfg->requests.data[i].countryCode);
+        }
         free(cfg->requests.data);
         free(cfg->networks.data);
         free(cfg->asns.data);
@@ -1982,6 +2018,47 @@ static apr_status_t destroyConfig(void *dconfig) {
         free(cfg->powURI);
     }
     return APR_SUCCESS;
+}
+
+static void *createDirConf(apr_pool_t *p, __attribute__((unused)) char *context) {
+    repudiator_config *cfg = apr_palloc(p, sizeof(repudiator_config));
+    if (!cfg) {
+        ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "Failed to allocate configuration");
+        return NULL;
+    }
+
+    *cfg = (repudiator_config){
+        .enabled = 0,
+        .asnDBPath = NULL,
+        .countryDBPath = NULL,
+        .ipReputation = (struct ip_vector){.data = NULL, .size = 0},
+        .uaReputation = (struct re_vector){.data = NULL, .size = 0},
+        .uriReputation = (struct re_vector){.data = NULL, .size = 0},
+        .asnReputation = (struct asn_vector){.data = NULL, .size = 0},
+        .countryReputation = (struct country_vector){.data = NULL, .size = 0},
+        .warnReputation = DEFAULT_WARN_REPUTATION,
+        .blockReputation = DEFAULT_BLOCK_REPUTATION,
+        .perIPReputation = DEFAULT_PER_IP_REPUTATION,
+        .perNetworkReputation = DEFAULT_PER_NET_REPUTATION,
+        .perASNReputation = DEFAULT_PER_ASN_REPUTATION,
+        .scanTime = DEFAULT_SCAN_TIME,
+        .warnHttpReply = DEFAULT_WARN_HTTP_REPLY,
+        .blockHttpReply = DEFAULT_BLOCK_HTTP_REPLY,
+        .asns = (struct asn_count_vector){.data = NULL, .size = 0},
+        .networks = (struct nw_count_vector){.data = NULL, .size = 0},
+        .requests = (struct req_vector){.data = NULL, .size = 0},
+        .stateTemplate = strdup((const char *) state_html_file),
+        .powTemplate = strdup((const char *) pow_html_file),
+        .powURI = strdup(DEFAULT_POW_URI),
+        .powDifficulty = DEFAULT_POW_DIFFICULTY,
+        .powCookieMaxAge = DEFAULT_POW_COOKIE_MAXAGE,
+        .powAboveReputation = DEFAULT_POW_ABOVE_REPUTATION,
+        .powBelowReputation = DEFAULT_POW_BELOW_REPUTATION
+    };
+
+    apr_pool_cleanup_register(p, cfg, apr_pool_cleanup_null, destroyConfig);
+
+    return cfg;
 }
 
 static const char *setEnabled(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
@@ -2327,7 +2404,7 @@ static const char *setPOWUri(__attribute__((unused)) cmd_parms *cmd, void *dconf
         ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
                      "Invalid RepudiatorPOWUri value '%s', using default %s.",
                      value, DEFAULT_POW_URI);
-        cfg->powURI = DEFAULT_POW_URI;
+        cfg->powURI = strdup(DEFAULT_POW_URI);
     }
 
     return NULL;
@@ -2505,8 +2582,6 @@ static void registerHooks(apr_pool_t *p) {
 
     ap_hook_access_checker(powChallenge, NULL, NULL, APR_HOOK_FIRST - 6);
     ap_hook_access_checker(accessChecker, NULL, NULL, APR_HOOK_FIRST - 5);
-
-    apr_pool_cleanup_register(p, NULL, apr_pool_cleanup_null, destroyConfig);
 }
 
 AP_DECLARE_MODULE(repudiator) = {
