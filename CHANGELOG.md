@@ -1,3 +1,15 @@
+# [1.17.0](https://github.com/adlerre/mod_repudiator/compare/v1.16.1...v1.17.0) (2026-09-17)
+
+
+### Bug Fixes
+
+* set file permission for repudiator_stats file ([6f12858](https://github.com/adlerre/mod_repudiator/commit/6f128583c626de9ca0a102c6a9d8062b4e60e693))
+
+
+### Features
+
+* add port option ([98bf7f8](https://github.com/adlerre/mod_repudiator/commit/98bf7f87468fa1e70964ac2aed11a3fa3f2df5fe))
+
 ## [1.16.1](https://github.com/adlerre/mod_repudiator/compare/v1.16.0...v1.16.1) (2026-09-17)
 
 
