@@ -1744,10 +1744,14 @@ static apr_status_t readStats(apr_pool_t *pool, counters_t *counters) {
             return rv;
         }
 
-        apr_file_lock(f, APR_FLOCK_SHARED);
+        rv = apr_file_lock(f, APR_FLOCK_SHARED);
+        if (rv != APR_SUCCESS) {
+            apr_file_close(f);
+            return rv;
+        }
 
         apr_size_t size = sizeof(counters_t);
-        apr_file_read(f, counters, &size);
+        rv = apr_file_read(f, counters, &size);
 
         apr_file_unlock(f);
 
@@ -1767,10 +1771,14 @@ static apr_status_t writeStats(apr_pool_t *pool, const counters_t *counters) {
             return rv;
         }
 
-        apr_file_lock(f, APR_FLOCK_EXCLUSIVE);
+        rv = apr_file_lock(f, APR_FLOCK_EXCLUSIVE);
+        if (rv != APR_SUCCESS) {
+            apr_file_close(f);
+            return rv;
+        }
 
         apr_size_t size = sizeof(counters_t);
-        apr_file_write(f, counters, &size);
+        rv = apr_file_write(f, counters, &size);
 
         apr_file_unlock(f);
 
