@@ -4,7 +4,7 @@ OPTIND=1
 
 MAGIC_MIME_TYPE="application/x-rep-stats"
 HANDLER="repudiator-stats"
-HOSTNAME=""
+HOSTNAME="localhost"
 PORT=""
 VERBOSE=0
 ONLY_IPV4=""
@@ -53,6 +53,6 @@ if [[ -n "$HOSTNAME" ]]; then
     exit 1
   fi
 else
-  echo "$0 -h [HOSTNAME] {-ha [HANDLER]} {-p [PORT]} {-v}"
+  echo "$0 -{h [HOSTNAME]} {-ha [HANDLER]} {-p [PORT]} {-v}"
   exit 3
 fi
