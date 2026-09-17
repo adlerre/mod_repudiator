@@ -1314,7 +1314,9 @@ static int accessChecker(request_rec *r) {
                 char location[HUGE_STRING_LEN] = {0};
                 snprintf(location, sizeof(location), "%s?%s=%s", cfg->powURI, POW_REDIRECT_URI, r->unparsed_uri);
                 apr_table_setn(r->headers_out, "Location", location);
-                return HTTP_MOVED_TEMPORARILY;
+                return r->method_number == M_POST || r->method_number == M_PUT
+                           ? HTTP_SEE_OTHER
+                           : HTTP_MOVED_TEMPORARILY;
             }
 
             req->uaReputation = 0;
