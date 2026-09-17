@@ -1,3 +1,15 @@
+# [1.16.0](https://github.com/adlerre/mod_repudiator/compare/v1.15.1...v1.16.0) (2026-09-17)
+
+
+### Bug Fixes
+
+* redirect of post and put ([090fad9](https://github.com/adlerre/mod_repudiator/commit/090fad98b7afdbbafd934d5a697e963e2fa4c165))
+
+
+### Features
+
+* implement simple statistics ([#15](https://github.com/adlerre/mod_repudiator/issues/15)) ([0fe20c6](https://github.com/adlerre/mod_repudiator/commit/0fe20c624ceb8c5df81ee81e18488a17c32651c7))
+
 ## [1.15.1](https://github.com/adlerre/mod_repudiator/compare/v1.15.0...v1.15.1) (2026-09-14)
 
 
