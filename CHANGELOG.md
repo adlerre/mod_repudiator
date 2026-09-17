@@ -1,3 +1,16 @@
+# [1.18.0](https://github.com/adlerre/mod_repudiator/compare/v1.17.0...v1.18.0) (2026-09-17)
+
+
+### Bug Fixes
+
+* don't output state template on HEAD ([479acf8](https://github.com/adlerre/mod_repudiator/commit/479acf83240a4b99c2603617087ee001f197db39))
+
+
+### Features
+
+* bump versions ([23eb13c](https://github.com/adlerre/mod_repudiator/commit/23eb13c51f57de5eb7343e7c4778e436ed0c5401))
+* use localhost as default ([03d8972](https://github.com/adlerre/mod_repudiator/commit/03d897235db84b1bad7b4e3d283ffa72de866a5e))
+
 # [1.17.0](https://github.com/adlerre/mod_repudiator/compare/v1.16.1...v1.17.0) (2026-09-17)
 
 
