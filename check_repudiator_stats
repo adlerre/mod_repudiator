@@ -35,11 +35,12 @@ if [[ -n "$HOSTNAME" ]]; then
   stats=$(curl --header "Accept: $MAGIC_MIME_TYPE" -s http://$HOSTNAME$PORT/$HANDLER $ONLY_IPV4)
 
   if [[ -n "$stats" ]]; then
-    requests=$(echo "$stats" | jq '.["requests"]')
-    blocked=$(echo "$stats" | jq '.["blocked"]')
-    warned=$(echo "$stats" | jq '.["warned"]')
-    powRequests=$(echo "$stats" | jq '.["powRequests"]')
-    powCompleted=$(echo "$stats" | jq '.["powCompleted"]')
+    version=$(echo "$stats" | jq '.version' -r | grep -v "null")
+    requests=$(echo "$stats" | jq '.requests')
+    blocked=$(echo "$stats" | jq '.blocked')
+    warned=$(echo "$stats" | jq '.warned')
+    powRequests=$(echo "$stats" | jq '.powRequests')
+    powCompleted=$(echo "$stats" | jq '.powCompleted')
 
     [ $blocked -ne 0 ] && perBlocked=$(awk -v x="$requests" -v y="$blocked" 'BEGIN {printf "%.2f", 100 / x * y}') || perBlocked=0
     [ $warned -ne 0 ] && perWarned=$(awk -v x="$requests" -v y="$warned" 'BEGIN {printf "%.2f", 100 / x * y}') || perWarned=0
@@ -47,7 +48,10 @@ if [[ -n "$HOSTNAME" ]]; then
     [ $powCompleted -ne 0 ] && perPOWCompleted=$(awk -v x="$powRequests" -v y="$powCompleted" 'BEGIN {printf "%.2f", 100 / x * y}') || perPOWCompleted=0
 
     [ $VERBOSE -gt 0 ] && echo $stats
-    echo "OK - PercentBlocked:$perBlocked% PercentWarned:$perWarned% PercentPOWRequests:$perPOWRequests% PercentPOWCompleted:$perPOWCompleted% | PercentBlocked=$perBlocked%;; PercentWarned=$perWarned%;; PercentPOWRequests=$perPOWRequests%;; PercentPOWCompleted=$perPOWCompleted%;;"
+
+    [ -n "$version" ] && status="OK ($version)" || status="OK"
+
+    echo "$status - PercentBlocked:$perBlocked% PercentWarned:$perWarned% PercentPOWRequests:$perPOWRequests% PercentPOWCompleted:$perPOWCompleted% | PercentBlocked=$perBlocked%;; PercentWarned=$perWarned%;; PercentPOWRequests=$perPOWRequests%;; PercentPOWCompleted=$perPOWCompleted%;;"
   else
     echo "WARNING: No Data"
     exit 1

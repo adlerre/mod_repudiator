@@ -1879,8 +1879,8 @@ static int counterStats(request_rec *r) {
         readStats(repudiator_counters->pool, counters);
 
         ap_rprintf(r,
-                   "{\"requests\": %lu, \"blocked\": %lu, \"warned\": %lu, \"powRequests\": %lu, \"powCompleted\": %lu, \"updated\": %lu}\n",
-                   counters->requests, counters->blocked, counters->warned, counters->powRequests,
+                   "{\"version\": \"%s\", \"requests\": %lu, \"blocked\": %lu, \"warned\": %lu, \"powRequests\": %lu, \"powCompleted\": %lu, \"updated\": %lu}\n",
+                   REP_VERSION, counters->requests, counters->blocked, counters->warned, counters->powRequests,
                    counters->powCompleted, counters->updated
         );
 
