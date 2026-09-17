@@ -41,6 +41,8 @@ Runtime (APR), libmaxminddb and, optionally, PCRE2.
 - optional PCRE2 regex engine
 - `X-Reputation` response header
 - optional debug logging
+- persistent request statistics
+- JSON statistics handler
 - fail2ban integration
 
 ## How reputation works
@@ -72,14 +74,14 @@ values can be used to explicitly increase reputation.
 
 ### Default thresholds
 
-| Setting | Default | Meaning |
-|---|---:|---|
-| `RepudiatorWarnReputation` | `-200` | Warning threshold |
-| `RepudiatorBlockReputation` | `-400` | Blocking threshold |
-| `RepudiatorPerIPReputation` | `-0.033` | Penalty per IP request |
-| `RepudiatorPerNetReputation` | `-0.0033` | Penalty per network request |
-| `RepudiatorPerASNReputation` | `-0.00033` | Penalty per ASN request |
-| `RepudiatorScanTime` | `60` | Request counting interval in seconds |
+| Setting                      |    Default | Meaning                              |
+|------------------------------|-----------:|--------------------------------------|
+| `RepudiatorWarnReputation`   |     `-200` | Warning threshold                    |
+| `RepudiatorBlockReputation`  |     `-400` | Blocking threshold                   |
+| `RepudiatorPerIPReputation`  |   `-0.033` | Penalty per IP request               |
+| `RepudiatorPerNetReputation` |  `-0.0033` | Penalty per network request          |
+| `RepudiatorPerASNReputation` | `-0.00033` | Penalty per ASN request              |
+| `RepudiatorScanTime`         |       `60` | Request counting interval in seconds |
 
 The module supports both the usual configuration where the block threshold is
 lower than the warning threshold and the inverse ordering.
@@ -104,12 +106,12 @@ client IP and is valid for the configured period.
 
 The default POW settings are:
 
-| Setting | Default |
-|---|---:|
-| `RepudiatorPOWUri` | `/rep-pow-challenge` |
-| `RepudiatorPOWCookieMaxAge` | `3600` seconds |
-| `RepudiatorPOWAboveReputation` | `-150.0` |
-| `RepudiatorPOWBelowReputation` | `-1000.0` |
+| Setting                        |              Default |
+|--------------------------------|---------------------:|
+| `RepudiatorPOWUri`             | `/rep-pow-challenge` |
+| `RepudiatorPOWCookieMaxAge`    |       `3600` seconds |
+| `RepudiatorPOWAboveReputation` |             `-150.0` |
+| `RepudiatorPOWBelowReputation` |            `-1000.0` |
 
 The challenge template is supplied through `RepudiatorPOWTemplateFile`.
 
@@ -136,6 +138,7 @@ json.c
 sha256.c
 pow_template.c
 state_template.c
+...
 ```
 
 Therefore these files must be available in the source directory when building
@@ -695,6 +698,63 @@ BLOCK
 The header therefore provides a convenient way to expose the current
 classification and score to downstream components.
 
+## Statistics
+
+`mod_repudiator` maintains persistent aggregate counters for requests, warnings,
+blocks and Proof-of-Work activity. The statistics are stored in the Apache runtime
+directory in the binary file:
+
+```text
+repudiator_stats
+```
+
+The statistics file is accessed with an exclusive/shared file lock, allowing the
+counters to be updated and read while Apache is running. The module periodically
+flushes in-process counters to this file.
+
+### Statistics handler
+
+The module provides the handler names `repudiator-stats` and
+
+`application/x-rep-stats`. A GET request returns JSON. For example:
+
+```apache
+<Location "/repudiator-stats">
+    SetHandler repudiator-stats
+</Location>
+```
+
+The response has the following structure:
+
+```json
+{
+  "requests": 12345,
+  "blocked": 42,
+  "warned": 123,
+  "powRequests": 456,
+  "powCompleted": 321,
+  "updated": 1726500000
+}
+```
+
+The fields are:
+
+| Field          | Description                                                     |
+|----------------|-----------------------------------------------------------------|
+| `requests`     | Number of processed requests recorded by the persistent counter |
+| `blocked`      | Number of requests classified as `BLOCK`                        |
+| `warned`       | Number of requests classified as `WARN`                         |
+| `powRequests`  | Number of POW challenge requests generated                      |
+| `powCompleted` | Number of successfully completed POW challenges                 |
+| `updated`      | Unix timestamp of the last statistics update                    |
+
+If the statistics file cannot be opened during module initialization, statistics
+processing is disabled and the module logs a warning. The statistics handler then
+returns `404`.
+> > **Security:** Do not expose the statistics handler publicly unless the returned
+> > aggregate traffic information is intentionally public. Restrict the location with
+> > your normal Apache access-control mechanisms when necessary.
+
 ## Logging
 
 The module logs reputation decisions through the Apache error log.
@@ -831,6 +891,11 @@ apachectl configtest
 ```
 
 Then inspect the Apache error log while generating test traffic.
+
+When changing the module, also test the statistics handler and verify that
+`requests`, `warned`, `blocked`, `powRequests` and `powCompleted` are updated as
+expected. The persistent statistics update is throttled to approximately once per
+second.
 
 When changing reputation rules, test at least:
 
