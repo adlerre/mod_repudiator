@@ -2578,7 +2578,7 @@ static void registerHooks(apr_pool_t *p) {
     ap_hook_insert_filter(headersInsertOutputFilter, NULL, NULL, APR_HOOK_LAST);
     ap_hook_insert_error_filter(headersInsertErrorFilter, NULL, NULL, APR_HOOK_LAST);
 
-    ap_hook_handler(counterStats, NULL, NULL, APR_HOOK_MIDDLE);
+    ap_hook_handler(counterStats, NULL, NULL, APR_HOOK_REALLY_FIRST);
 
     ap_hook_access_checker(powChallenge, NULL, NULL, APR_HOOK_REALLY_FIRST);
     ap_hook_access_checker(accessChecker, NULL, NULL, APR_HOOK_REALLY_FIRST);
