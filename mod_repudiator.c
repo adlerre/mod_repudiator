@@ -1903,9 +1903,11 @@ static int counterStats(request_rec *r) {
     counters_t *counters = apr_palloc(repudiator_counters->pool, sizeof(counters_t));
     readStats(repudiator_counters->pool, counters);
 
+    char *version = strReplace(STR(REP_VERSION), "\"", "");
+
     ap_rprintf(r,
                "{\"version\": \"%s\", \"requests\": %lu, \"blocked\": %lu, \"warned\": %lu, \"powRequests\": %lu, \"powCompleted\": %lu, \"updated\": %lu}\n",
-               STR(REP_VERSION), counters->requests, counters->blocked, counters->warned, counters->powRequests,
+               version, counters->requests, counters->blocked, counters->warned, counters->powRequests,
                counters->powCompleted, counters->updated
     );
 
