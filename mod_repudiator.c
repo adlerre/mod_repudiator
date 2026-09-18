@@ -1766,7 +1766,7 @@ static apr_status_t readStats(apr_pool_t *pool, counters_t *counters) {
         }
 
         apr_size_t size = sizeof(counters_t);
-        rv = apr_file_read(f, counters, &size);
+        apr_file_read(f, counters, &size);
 
         apr_file_unlock(f);
 
@@ -1793,7 +1793,7 @@ static apr_status_t writeStats(apr_pool_t *pool, const counters_t *counters) {
         }
 
         apr_size_t size = sizeof(counters_t);
-        rv = apr_file_write(f, counters, &size);
+        apr_file_write(f, counters, &size);
 
         apr_file_unlock(f);
 
@@ -1893,22 +1893,22 @@ static int counterStats(request_rec *r) {
         return HTTP_NOT_FOUND;
     }
 
-    if (r->method_number == M_GET) {
-        ap_set_content_type(r, "application/json");
-
-        counters_t *counters = apr_palloc(repudiator_counters->pool, sizeof(counters_t));
-        readStats(repudiator_counters->pool, counters);
-
-        ap_rprintf(r,
-                   "{\"version\": %s, \"requests\": %lu, \"blocked\": %lu, \"warned\": %lu, \"powRequests\": %lu, \"powCompleted\": %lu, \"updated\": %lu}\n",
-                   STR(REP_VERSION), counters->requests, counters->blocked, counters->warned, counters->powRequests,
-                   counters->powCompleted, counters->updated
-        );
-
-        return DONE;
+    if (r->method_number != M_GET) {
+        return DECLINED;
     }
 
-    return DECLINED;
+    ap_set_content_type(r, "application/json");
+
+    counters_t *counters = apr_palloc(repudiator_counters->pool, sizeof(counters_t));
+    readStats(repudiator_counters->pool, counters);
+
+    ap_rprintf(r,
+               "{\"version\": %s, \"requests\": %lu, \"blocked\": %lu, \"warned\": %lu, \"powRequests\": %lu, \"powCompleted\": %lu, \"updated\": %lu}\n",
+               STR(REP_VERSION), counters->requests, counters->blocked, counters->warned, counters->powRequests,
+               counters->powCompleted, counters->updated
+    );
+
+    return DONE;
 }
 
 // --------------------------------------------------------------------------------------------------------------------
@@ -2578,10 +2578,10 @@ static void registerHooks(apr_pool_t *p) {
     ap_hook_insert_filter(headersInsertOutputFilter, NULL, NULL, APR_HOOK_LAST);
     ap_hook_insert_error_filter(headersInsertErrorFilter, NULL, NULL, APR_HOOK_LAST);
 
-    ap_hook_handler(counterStats, NULL, NULL, APR_HOOK_FIRST - 6);
+    ap_hook_handler(counterStats, NULL, NULL, APR_HOOK_MIDDLE);
 
-    ap_hook_access_checker(powChallenge, NULL, NULL, APR_HOOK_FIRST - 6);
-    ap_hook_access_checker(accessChecker, NULL, NULL, APR_HOOK_FIRST - 5);
+    ap_hook_access_checker(powChallenge, NULL, NULL, APR_HOOK_REALLY_FIRST);
+    ap_hook_access_checker(accessChecker, NULL, NULL, APR_HOOK_REALLY_FIRST);
 }
 
 AP_DECLARE_MODULE(repudiator) = {
