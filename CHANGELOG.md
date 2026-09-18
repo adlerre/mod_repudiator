@@ -1,3 +1,10 @@
+## [1.19.2](https://github.com/adlerre/mod_repudiator/compare/v1.19.1...v1.19.2) (2026-09-18)
+
+
+### Bug Fixes
+
+* handler order ([1385dc1](https://github.com/adlerre/mod_repudiator/commit/1385dc10fec01fd49613eefd02f843250c87fcf3))
+
 ## [1.19.1](https://github.com/adlerre/mod_repudiator/compare/v1.19.0...v1.19.1) (2026-09-18)
 
 
