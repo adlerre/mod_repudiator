@@ -101,7 +101,7 @@ module AP_MODULE_DECLARE_DATA repudiator_module;
 
 #define MAX_BUF_LEN 1000000
 
-struct ip_node {
+typedef struct {
     union {
         struct in_addr v4;
         struct in6_addr v6;
@@ -114,14 +114,14 @@ struct ip_node {
 
     double reputation;
     char family; // AF_INET or AF_INET6
-};
+} ip_node_t;
 
-struct ip_vector {
-    struct ip_node *data;
+typedef struct {
+    ip_node_t *data;
     size_t size;
-};
+} ip_vector_t;
 
-struct re_node {
+typedef struct {
 #ifdef PCRE2
     pcre2_code *re;
     pcre2_match_data *match_data;
@@ -129,69 +129,69 @@ struct re_node {
     regex_t re;
 #endif
     double reputation;
-};
+} re_node_t;
 
-struct re_vector {
-    struct re_node *data;
+typedef struct {
+    re_node_t *data;
     size_t size;
-};
+} re_vector_t;
 
-struct asn_node {
+typedef struct {
     u_int32_t asn;
     double reputation;
-};
+} asn_node;
 
-struct asn_vector {
-    struct asn_node *data;
+typedef struct {
+    asn_node *data;
     size_t size;
-};
+} asn_vector_t;
 
-struct country_node {
+typedef struct {
     char *code;
     double reputation;
-};
+} country_node_t;
 
-struct country_vector {
-    struct country_node *data;
+typedef struct {
+    country_node_t *data;
     size_t size;
-};
+} country_vector_t;
 
-struct status_node {
+typedef struct {
     uint32_t status;
     double reputation;
-};
+} status_node_t;
 
-struct status_vector {
-    struct status_node *data;
+typedef struct {
+    status_node_t *data;
     size_t size;
-};
+} status_vector_t;
 
-struct asn_count {
+typedef struct {
     u_int32_t asn;
     size_t count;
     time_t lastSeen;
-};
+} asn_count_t;
 
-struct asn_count_vector {
-    struct asn_count *data;
+typedef struct {
+    asn_count_t *data;
     size_t size;
-};
+} asn_count_vector_t;
 
-struct nw_count {
-    struct ip_node addr;
+typedef struct {
+    ip_node_t addr;
     size_t count;
     time_t lastSeen;
-};
+} nw_count_t;
 
-struct nw_count_vector {
-    struct nw_count *data;
+typedef struct {
+    nw_count_t *data;
     size_t size;
-};
+} nw_count_vector_t;
 
-struct req_node {
+typedef struct {
     u_int32_t asn;
     char *countryCode;
-    struct ip_node addr;
+    ip_node_t addr;
 
     size_t count;
     time_t lastSeen;
@@ -203,23 +203,23 @@ struct req_node {
     double countryReputation;
     double statusReputation;
     double reputation;
-};
+} req_node_t;
 
-struct req_vector {
-    struct req_node *data;
+typedef struct {
+    req_node_t *data;
     size_t size;
-};
+} req_vector_t;
 
 typedef struct {
     int enabled;
     char *asnDBPath;
     char *countryDBPath;
-    struct ip_vector ipReputation;
-    struct re_vector uaReputation;
-    struct re_vector uriReputation;
-    struct asn_vector asnReputation;
-    struct country_vector countryReputation;
-    struct status_vector statusReputation;
+    ip_vector_t ipReputation;
+    re_vector_t uaReputation;
+    re_vector_t uriReputation;
+    asn_vector_t asnReputation;
+    country_vector_t countryReputation;
+    status_vector_t statusReputation;
     double warnReputation;
     double blockReputation;
     double perIPReputation;
@@ -231,9 +231,9 @@ typedef struct {
 
     MMDB_s *mmdbASN;
     MMDB_s *mmdbCountry;
-    struct asn_count_vector asns;
-    struct nw_count_vector networks;
-    struct req_vector requests;
+    asn_count_vector_t asns;
+    nw_count_vector_t networks;
+    req_vector_t requests;
 
     char *stateTemplate;
 
@@ -243,7 +243,7 @@ typedef struct {
     int powCookieMaxAge;
     double powAboveReputation;
     double powBelowReputation;
-} repudiator_config;
+} repudiator_config_t;
 
 // --------------------------------------------------------------------------------------------------------------------
 // Counters
@@ -289,9 +289,9 @@ static void ipv6ApplyMask(struct in6_addr *restrict addr, const struct in6_addr 
 
 static int ipv6PrefixToMask(unsigned prefix, struct in6_addr *mask);
 
-static int isInRange(const struct ip_node *range, const struct ip_node *ipNode);
+static int isInRange(const ip_node_t *range, const ip_node_t *ipNode);
 
-static int convertAddress(const char *addr, struct ip_node *ipNode);
+static int convertAddress(const char *addr, ip_node_t *ipNode);
 
 static char const *getClientIp(request_rec *r);
 
@@ -299,62 +299,62 @@ static char const *getClientIp(request_rec *r);
 // Reputation
 // --------------------------------------------------------------------------------------------------------------------
 
-static int parseIPReputation(struct ip_vector *ipReputation, const char *ipm, const char *rep);
+static int parseIPReputation(ip_vector_t *ipReputation, const char *ipm, const char *rep);
 
-static int parseRegexReputation(struct re_vector *reVector, const char *regex, const char *rep);
+static int parseRegexReputation(re_vector_t *reVector, const char *regex, const char *rep);
 
-static int parseASNReputation(struct asn_vector *asnVector, const char *asn, const char *rep);
+static int parseASNReputation(asn_vector_t *asnVector, const char *asn, const char *rep);
 
-static int parseCountryReputation(struct country_vector *countryVector, const char *code, const char *rep);
+static int parseCountryReputation(country_vector_t *countryVector, const char *code, const char *rep);
 
-static int parseStatusReputation(struct status_vector *statusVector, const char *ret, const char *rep);
+static int parseStatusReputation(status_vector_t *statusVector, const char *ret, const char *rep);
 
-double calcIPReputation(const struct ip_vector *ipReputation, const struct ip_node *ipNode);
+double calcIPReputation(const ip_vector_t *ipReputation, const ip_node_t *ipNode);
 
-double calcRegexReputation(const struct re_vector *reVector, const char *str);
+double calcRegexReputation(const re_vector_t *reVector, const char *str);
 
-double calcASNReputation(const struct asn_vector *asnVector, u_int32_t asn);
+double calcASNReputation(const asn_vector_t *asnVector, u_int32_t asn);
 
-double calcCountryReputation(const struct country_vector *countryVector, const char *code);
+double calcCountryReputation(const country_vector_t *countryVector, const char *code);
 
-double calcStatusReputation(const struct status_vector *statusVector, u_int32_t status);
+double calcStatusReputation(const status_vector_t *statusVector, u_int32_t status);
 
-uint32_t lookupIPInfo(MMDB_s *mmdb, struct ip_node *node);
+uint32_t lookupIPInfo(MMDB_s *mmdb, ip_node_t *node);
 
-char *lookupCountryInfo(MMDB_s *mmdb, struct ip_node *node);
+char *lookupCountryInfo(MMDB_s *mmdb, ip_node_t *node);
 
-long findRequest(const struct req_vector *requests, const struct ip_node *ip);
+long findRequest(const req_vector_t *requests, const ip_node_t *ip);
 
-struct req_node *addRequest(repudiator_config *cfg, const struct ip_node *ip, uint32_t asn, const char *countryCode,
-                            const char *userAgent, const char *uri, time_t timestamp);
+req_node_t *addRequest(repudiator_config_t *cfg, const ip_node_t *ip, uint32_t asn, const char *countryCode,
+                       const char *userAgent, const char *uri, time_t timestamp);
 
-int removeRequest(struct req_vector *requests, size_t idx);
+int removeRequest(req_vector_t *requests, size_t idx);
 
-long findNetwork(const struct nw_count_vector *networks, const struct ip_node *addr);
+long findNetwork(const nw_count_vector_t *networks, const ip_node_t *addr);
 
-int removeNetwork(struct nw_count_vector *networks, size_t idx);
+int removeNetwork(nw_count_vector_t *networks, size_t idx);
 
-int incNetworkCount(struct nw_count_vector *networks, const struct ip_node *addr, time_t update, time_t scanTime);
+int incNetworkCount(nw_count_vector_t *networks, const ip_node_t *addr, time_t update, time_t scanTime);
 
-void cleanNetworks(struct nw_count_vector *networks, time_t before);
+void cleanNetworks(nw_count_vector_t *networks, time_t before);
 
-long findASN(const struct asn_count_vector *asns, u_int32_t asn);
+long findASN(const asn_count_vector_t *asns, u_int32_t asn);
 
-int removeASN(struct asn_count_vector *asns, size_t idx);
+int removeASN(asn_count_vector_t *asns, size_t idx);
 
-int incASNCount(struct asn_count_vector *asns, u_int32_t asn, time_t update, time_t scanTime);
+int incASNCount(asn_count_vector_t *asns, u_int32_t asn, time_t update, time_t scanTime);
 
-void cleanASNs(struct asn_count_vector *asns, time_t before);
+void cleanASNs(asn_count_vector_t *asns, time_t before);
 
-int reputationState(const repudiator_config *cfg, double reputation);
+int reputationState(const repudiator_config_t *cfg, double reputation);
 
-double calcReputation(const repudiator_config *cfg, const struct req_node *reqNode, int type);
+double calcReputation(const repudiator_config_t *cfg, const req_node_t *reqNode, int type);
 
 static int accessChecker(request_rec *r);
 
-int doHeaders(const repudiator_config *cfg, request_rec *r, apr_table_t *headers);
+int doHeaders(const repudiator_config_t *cfg, request_rec *r, apr_table_t *headers);
 
-int handleStatusCode(const repudiator_config *cfg, request_rec *r);
+int handleStatusCode(const repudiator_config_t *cfg, request_rec *r);
 
 static apr_status_t headersOutputFilter(ap_filter_t *f, apr_bucket_brigade *in);
 
@@ -557,7 +557,7 @@ static int ipv6PrefixToMask(const unsigned prefix, struct in6_addr *mask) {
     return 0;
 }
 
-static int isInRange(const struct ip_node *range, const struct ip_node *ipNode) {
+static int isInRange(const ip_node_t *range, const ip_node_t *ipNode) {
     if (range->family != ipNode->family) {
         return 0;
     }
@@ -579,7 +579,7 @@ static int isInRange(const struct ip_node *range, const struct ip_node *ipNode) 
     return memcmp(&ip, &network, sizeof(network)) == 0;
 }
 
-static int convertAddress(const char *addr, struct ip_node *ipNode) {
+static int convertAddress(const char *addr, ip_node_t *ipNode) {
     if (addr == NULL) {
         return -1;
     }
@@ -600,7 +600,7 @@ static int convertAddress(const char *addr, struct ip_node *ipNode) {
 // Reputation
 // --------------------------------------------------------------------------------------------------------------------
 
-static int parseIPReputation(struct ip_vector *ipReputation, const char *ipm, const char *rep) {
+static int parseIPReputation(ip_vector_t *ipReputation, const char *ipm, const char *rep) {
     int rc = 0;
     int pos = 0;
     int m = 0;
@@ -655,7 +655,7 @@ static int parseIPReputation(struct ip_vector *ipReputation, const char *ipm, co
     }
 
     if (rc != 0) {
-        struct ip_node *node = reallocArray(ipReputation->data, ipReputation->size + 1, sizeof(*(ipReputation->data)));
+        ip_node_t *node = reallocArray(ipReputation->data, ipReputation->size + 1, sizeof(*(ipReputation->data)));
         if (!node) {
             return -1;
         }
@@ -663,14 +663,14 @@ static int parseIPReputation(struct ip_vector *ipReputation, const char *ipm, co
         ipReputation->data = node;
 
         if (family == AF_INET) {
-            ipReputation->data[ipReputation->size++] = (struct ip_node){
+            ipReputation->data[ipReputation->size++] = (ip_node_t){
                 .family = AF_INET,
                 .ip.v4 = ipv4,
                 .mask.v4 = mv4,
                 .reputation = strtod(rep, NULL)
             };
         } else {
-            ipReputation->data[ipReputation->size++] = (struct ip_node){
+            ipReputation->data[ipReputation->size++] = (ip_node_t){
                 .family = AF_INET6,
                 .ip.v6 = ipv6,
                 .mask.v6 = mv6,
@@ -686,7 +686,7 @@ static int parseIPReputation(struct ip_vector *ipReputation, const char *ipm, co
     return rc;
 }
 
-static int parseRegexReputation(struct re_vector *reVector, const char *regex, const char *rep) {
+static int parseRegexReputation(re_vector_t *reVector, const char *regex, const char *rep) {
     int rc = 0;
 
     if (strlen(regex) != 0 && strlen(rep) != 0) {
@@ -707,7 +707,7 @@ static int parseRegexReputation(struct re_vector *reVector, const char *regex, c
         if (re) {
             pcre2_match_data *match_data = pcre2_match_data_create_from_pattern(re, NULL);
 
-            struct re_node *node = reallocArray(reVector->data, reVector->size + 1, sizeof(*(reVector->data)));
+            re_node_t *node = reallocArray(reVector->data, reVector->size + 1, sizeof(*(reVector->data)));
             if (!node) {
                 pcre2_match_data_free(match_data);
                 pcre2_code_free(re);
@@ -715,7 +715,7 @@ static int parseRegexReputation(struct re_vector *reVector, const char *regex, c
             }
 
             reVector->data = node;
-            reVector->data[reVector->size++] = (struct re_node){
+            reVector->data[reVector->size++] = (re_node_t){
                 .re = re,
                 .match_data = match_data,
                 .reputation = strtod(rep, NULL)
@@ -726,13 +726,13 @@ static int parseRegexReputation(struct re_vector *reVector, const char *regex, c
         rc = regcomp(&re, regex, REG_EXTENDED | REG_ICASE);
 
         if (!rc) {
-            struct re_node *node = reallocArray(reVector->data, reVector->size + 1, sizeof(*(reVector->data)));
+            re_node_t *node = reallocArray(reVector->data, reVector->size + 1, sizeof(*(reVector->data)));
             if (!node) {
                 return -1;
             }
 
             reVector->data = node;
-            reVector->data[reVector->size++] = (struct re_node){
+            reVector->data[reVector->size++] = (re_node_t){
                 .re = re,
                 .reputation = strtod(rep, NULL)
             };
@@ -743,17 +743,17 @@ static int parseRegexReputation(struct re_vector *reVector, const char *regex, c
     return rc;
 }
 
-static int parseASNReputation(struct asn_vector *asnVector, const char *asn, const char *rep) {
+static int parseASNReputation(asn_vector_t *asnVector, const char *asn, const char *rep) {
     int rc = 0;
 
     if (strlen(asn) != 0 && strlen(rep) != 0) {
-        struct asn_node *node = reallocArray(asnVector->data, asnVector->size + 1, sizeof(*(asnVector->data)));
+        asn_node *node = reallocArray(asnVector->data, asnVector->size + 1, sizeof(*(asnVector->data)));
         if (!node) {
             return -1;
         }
 
         asnVector->data = node;
-        asnVector->data[asnVector->size++] = (struct asn_node){
+        asnVector->data[asnVector->size++] = (asn_node){
             .asn = strtol(asn, NULL, 10),
             .reputation = strtod(rep, NULL)
         };
@@ -764,18 +764,18 @@ static int parseASNReputation(struct asn_vector *asnVector, const char *asn, con
     return rc;
 }
 
-static int parseCountryReputation(struct country_vector *countryVector, const char *code, const char *rep) {
+static int parseCountryReputation(country_vector_t *countryVector, const char *code, const char *rep) {
     int rc = 0;
 
     if (strlen(code) != 0 && strlen(rep) != 0) {
-        struct country_node *node = reallocArray(countryVector->data, countryVector->size + 1,
-                                                 sizeof(*(countryVector->data)));
+        country_node_t *node = reallocArray(countryVector->data, countryVector->size + 1,
+                                            sizeof(*(countryVector->data)));
         if (!node) {
             return -1;
         }
 
         countryVector->data = node;
-        countryVector->data[countryVector->size++] = (struct country_node){
+        countryVector->data[countryVector->size++] = (country_node_t){
             .code = strdup(code),
             .reputation = strtod(rep, NULL)
         };
@@ -786,7 +786,7 @@ static int parseCountryReputation(struct country_vector *countryVector, const ch
     return rc;
 }
 
-static int parseStatusReputation(struct status_vector *statusVector, const char *ret, const char *rep) {
+static int parseStatusReputation(status_vector_t *statusVector, const char *ret, const char *rep) {
     int rc = 0;
 
     if (strlen(ret) != 0 && strlen(rep) != 0) {
@@ -794,14 +794,14 @@ static int parseStatusReputation(struct status_vector *statusVector, const char 
         if (status < 99 || status > 599) {
             rc = -2;
         } else {
-            struct status_node *node = reallocArray(statusVector->data, statusVector->size + 1,
-                                                    sizeof(*(statusVector->data)));
+            status_node_t *node = reallocArray(statusVector->data, statusVector->size + 1,
+                                               sizeof(*(statusVector->data)));
             if (!node) {
                 return -1;
             }
 
             statusVector->data = node;
-            statusVector->data[statusVector->size++] = (struct status_node){
+            statusVector->data[statusVector->size++] = (status_node_t){
                 .status = status,
                 .reputation = strtod(rep, NULL)
             };
@@ -813,10 +813,10 @@ static int parseStatusReputation(struct status_vector *statusVector, const char 
     return rc;
 }
 
-double calcIPReputation(const struct ip_vector *ipReputation, const struct ip_node *ipNode) {
+double calcIPReputation(const ip_vector_t *ipReputation, const ip_node_t *ipNode) {
     double rc = 0.0;
     for (size_t i = 0; i < ipReputation->size; ++i) {
-        const struct ip_node *node = &ipReputation->data[i];
+        const ip_node_t *node = &ipReputation->data[i];
         if (node->family == ipNode->family) {
             if (node->family == AF_INET && (node->ip.v4.s_addr == ipNode->ip.v4.s_addr || isInRange(node, ipNode))) {
                 rc += node->reputation;
@@ -829,11 +829,11 @@ double calcIPReputation(const struct ip_vector *ipReputation, const struct ip_no
     return rc;
 }
 
-double calcRegexReputation(const struct re_vector *reVector, const char *str) {
+double calcRegexReputation(const re_vector_t *reVector, const char *str) {
     double ret = 0.0;
     if (str != NULL && strlen(str) != 0) {
         for (size_t i = 0; i < reVector->size; ++i) {
-            const struct re_node *node = &reVector->data[i];
+            const re_node_t *node = &reVector->data[i];
 #ifdef PCRE2
             PCRE2_SPTR subject = (PCRE2_SPTR) str;
             size_t subject_length = strlen((const char *) subject);
@@ -860,10 +860,10 @@ double calcRegexReputation(const struct re_vector *reVector, const char *str) {
     return ret;
 }
 
-double calcASNReputation(const struct asn_vector *asnVector, const u_int32_t asn) {
-    const struct asn_node *wnode = NULL;
+double calcASNReputation(const asn_vector_t *asnVector, const u_int32_t asn) {
+    const asn_node *wnode = NULL;
     for (size_t i = 0; i < asnVector->size; ++i) {
-        const struct asn_node *node = &asnVector->data[i];
+        const asn_node *node = &asnVector->data[i];
         if (node->asn == asn) {
             return node->reputation;
         }
@@ -879,9 +879,9 @@ double calcASNReputation(const struct asn_vector *asnVector, const u_int32_t asn
     return 0.0;
 }
 
-double calcCountryReputation(const struct country_vector *countryVector, const char *code) {
+double calcCountryReputation(const country_vector_t *countryVector, const char *code) {
     for (size_t i = 0; i < countryVector->size; ++i) {
-        const struct country_node *node = &countryVector->data[i];
+        const country_node_t *node = &countryVector->data[i];
         if (code != NULL && node->code != NULL && strcasecmp(node->code, code) == 0) {
             return node->reputation;
         }
@@ -890,9 +890,9 @@ double calcCountryReputation(const struct country_vector *countryVector, const c
     return 0.0;
 }
 
-double calcStatusReputation(const struct status_vector *statusVector, const u_int32_t status) {
+double calcStatusReputation(const status_vector_t *statusVector, const u_int32_t status) {
     for (size_t i = 0; i < statusVector->size; ++i) {
-        const struct status_node *node = &statusVector->data[i];
+        const status_node_t *node = &statusVector->data[i];
         if (node->status == status) {
             return node->reputation;
         }
@@ -900,7 +900,7 @@ double calcStatusReputation(const struct status_vector *statusVector, const u_in
     return 0.0;
 }
 
-uint32_t lookupIPInfo(MMDB_s *mmdb, struct ip_node *node) {
+uint32_t lookupIPInfo(MMDB_s *mmdb, ip_node_t *node) {
     uint32_t asn = 0;
     int mmdb_error = 0;
     int gai_error = 0;
@@ -954,7 +954,7 @@ uint32_t lookupIPInfo(MMDB_s *mmdb, struct ip_node *node) {
     return asn;
 }
 
-char *lookupCountryInfo(MMDB_s *mmdb, struct ip_node *node) {
+char *lookupCountryInfo(MMDB_s *mmdb, ip_node_t *node) {
     char *code = NULL;
     int mmdb_error = 0;
     int gai_error = 0;
@@ -992,10 +992,10 @@ char *lookupCountryInfo(MMDB_s *mmdb, struct ip_node *node) {
     return code;
 }
 
-long findRequest(const struct req_vector *requests, const struct ip_node *ip) {
+long findRequest(const req_vector_t *requests, const ip_node_t *ip) {
     long idx = -1;
     for (size_t i = 0; i < requests->size; ++i) {
-        const struct req_node *node = &requests->data[i];
+        const req_node_t *node = &requests->data[i];
         if (node->addr.family == ip->family) {
             if ((node->addr.family == AF_INET && node->addr.ip.v4.s_addr == ip->ip.v4.s_addr) ||
                 (node->addr.family == AF_INET6 &&
@@ -1008,22 +1008,22 @@ long findRequest(const struct req_vector *requests, const struct ip_node *ip) {
     return idx;
 }
 
-struct req_node *addRequest(repudiator_config *cfg, const struct ip_node *ip, const uint32_t asn,
-                            const char *countryCode, const char *userAgent,
-                            const char *uri, const time_t timestamp) {
+req_node_t *addRequest(repudiator_config_t *cfg, const ip_node_t *ip, const uint32_t asn,
+                       const char *countryCode, const char *userAgent,
+                       const char *uri, const time_t timestamp) {
     if (cfg == NULL || ip == NULL) {
         return NULL;
     }
 
     const long idx = findRequest(&cfg->requests, ip);
     if (idx == -1) {
-        struct req_node *node = reallocArray(cfg->requests.data, cfg->requests.size + 1, sizeof(*(cfg->requests.data)));
+        req_node_t *node = reallocArray(cfg->requests.data, cfg->requests.size + 1, sizeof(*(cfg->requests.data)));
         if (node == NULL) {
             return NULL;
         }
 
         cfg->requests.data = node;
-        cfg->requests.data[cfg->requests.size++] = (struct req_node){
+        cfg->requests.data[cfg->requests.size++] = (req_node_t){
             .asn = asn,
             .countryCode = countryCode != NULL ? strdup(countryCode) : NULL,
             .addr = *ip,
@@ -1040,7 +1040,7 @@ struct req_node *addRequest(repudiator_config *cfg, const struct ip_node *ip, co
         return node;
     }
 
-    struct req_node *node = &cfg->requests.data[idx];
+    req_node_t *node = &cfg->requests.data[idx];
 
     if (node->lastSeen > timestamp - cfg->scanTime) {
         if (node->count == SIZE_MAX) {
@@ -1065,7 +1065,7 @@ struct req_node *addRequest(repudiator_config *cfg, const struct ip_node *ip, co
     return node;
 }
 
-int removeRequest(struct req_vector *requests, const size_t idx) {
+int removeRequest(req_vector_t *requests, const size_t idx) {
     if (requests == NULL || idx >= requests->size || requests->data == NULL) {
         return -1;
     }
@@ -1089,11 +1089,11 @@ int removeRequest(struct req_vector *requests, const size_t idx) {
     return 0;
 }
 
-long findNetwork(const struct nw_count_vector *networks, const struct ip_node *addr) {
+long findNetwork(const nw_count_vector_t *networks, const ip_node_t *addr) {
     long idx = -1;
 
     for (size_t i = 0; i < networks->size; ++i) {
-        const struct nw_count *node = &networks->data[i];
+        const nw_count_t *node = &networks->data[i];
         if (isInRange(&node->addr, addr)) {
             idx = (long) i;
             break;
@@ -1103,7 +1103,7 @@ long findNetwork(const struct nw_count_vector *networks, const struct ip_node *a
     return idx;
 }
 
-int removeNetwork(struct nw_count_vector *networks, const size_t idx) {
+int removeNetwork(nw_count_vector_t *networks, const size_t idx) {
     if (networks == NULL || idx >= networks->size || networks->data == NULL) {
         return -1;
     }
@@ -1125,24 +1125,24 @@ int removeNetwork(struct nw_count_vector *networks, const size_t idx) {
     return 0;
 }
 
-int incNetworkCount(struct nw_count_vector *networks, const struct ip_node *addr, const time_t update,
+int incNetworkCount(nw_count_vector_t *networks, const ip_node_t *addr, const time_t update,
                     const time_t scanTime) {
     long idx = findNetwork(networks, addr);
     if (idx != -1) {
-        struct nw_count *node = &networks->data[idx];
+        nw_count_t *node = &networks->data[idx];
         if (node->lastSeen < update - scanTime)
             node->count = 1;
         else
             node->count++;
         node->lastSeen = update;
     } else {
-        struct nw_count *node = reallocArray(networks->data, networks->size + 1, sizeof(*(networks->data)));
+        nw_count_t *node = reallocArray(networks->data, networks->size + 1, sizeof(*(networks->data)));
         if (node == NULL) {
             return -1;
         }
 
         networks->data = node;
-        networks->data[networks->size++] = (struct nw_count){
+        networks->data[networks->size++] = (nw_count_t){
             .addr = *addr,
             .count = 1,
             .lastSeen = update
@@ -1152,10 +1152,10 @@ int incNetworkCount(struct nw_count_vector *networks, const struct ip_node *addr
     return 0;
 }
 
-void cleanNetworks(struct nw_count_vector *networks, const time_t before) {
+void cleanNetworks(nw_count_vector_t *networks, const time_t before) {
     size_t idx = 0;
     while (idx < networks->size) {
-        const struct nw_count *node = &networks->data[idx];
+        const nw_count_t *node = &networks->data[idx];
         if (node != NULL && node->lastSeen < before) {
             removeNetwork(networks, idx);
         } else {
@@ -1164,11 +1164,11 @@ void cleanNetworks(struct nw_count_vector *networks, const time_t before) {
     }
 }
 
-long findASN(const struct asn_count_vector *asns, const u_int32_t asn) {
+long findASN(const asn_count_vector_t *asns, const u_int32_t asn) {
     long idx = -1;
 
     for (size_t i = 0; i < asns->size; ++i) {
-        const struct asn_count *node = &asns->data[i];
+        const asn_count_t *node = &asns->data[i];
         if (node->asn == asn) {
             idx = (long) i;
             break;
@@ -1178,7 +1178,7 @@ long findASN(const struct asn_count_vector *asns, const u_int32_t asn) {
     return idx;
 }
 
-int removeASN(struct asn_count_vector *asns, const size_t idx) {
+int removeASN(asn_count_vector_t *asns, const size_t idx) {
     if (asns == NULL || idx >= asns->size || asns->data == NULL) {
         return -1;
     }
@@ -1200,23 +1200,23 @@ int removeASN(struct asn_count_vector *asns, const size_t idx) {
     return 0;
 }
 
-int incASNCount(struct asn_count_vector *asns, const u_int32_t asn, const time_t update, const time_t scanTime) {
+int incASNCount(asn_count_vector_t *asns, const u_int32_t asn, const time_t update, const time_t scanTime) {
     const long idx = findASN(asns, asn);
     if (idx != -1) {
-        struct asn_count *node = &asns->data[idx];
+        asn_count_t *node = &asns->data[idx];
         if (node->lastSeen < update - scanTime)
             node->count = 1;
         else
             node->count++;
         node->lastSeen = update;
     } else {
-        struct asn_count *node = reallocArray(asns->data, asns->size + 1, sizeof(*(asns->data)));
+        asn_count_t *node = reallocArray(asns->data, asns->size + 1, sizeof(*(asns->data)));
         if (node == NULL) {
             return -1;
         }
 
         asns->data = node;
-        asns->data[asns->size++] = (struct asn_count){
+        asns->data[asns->size++] = (asn_count_t){
             .asn = asn,
             .count = 1,
             .lastSeen = update
@@ -1226,10 +1226,10 @@ int incASNCount(struct asn_count_vector *asns, const u_int32_t asn, const time_t
     return 0;
 }
 
-void cleanASNs(struct asn_count_vector *asns, const time_t before) {
+void cleanASNs(asn_count_vector_t *asns, const time_t before) {
     size_t idx = 0;
     while (idx < asns->size) {
-        const struct asn_count *node = &asns->data[idx];
+        const asn_count_t *node = &asns->data[idx];
         if (node != NULL && node->lastSeen < before) {
             removeASN(asns, idx);
         } else {
@@ -1238,7 +1238,7 @@ void cleanASNs(struct asn_count_vector *asns, const time_t before) {
     }
 }
 
-int reputationState(const repudiator_config *cfg, const double reputation) {
+int reputationState(const repudiator_config_t *cfg, const double reputation) {
     if (cfg->blockReputation < cfg->warnReputation) {
         if (reputation <= cfg->warnReputation && reputation >= cfg->blockReputation) {
             return REP_WARN;
@@ -1258,7 +1258,7 @@ int reputationState(const repudiator_config *cfg, const double reputation) {
     return REP_OK;
 }
 
-double calcReputation(const repudiator_config *cfg, const struct req_node *reqNode, const int type) {
+double calcReputation(const repudiator_config_t *cfg, const req_node_t *reqNode, const int type) {
     long idx;
     switch (type) {
         case 1:
@@ -1278,7 +1278,7 @@ double calcReputation(const repudiator_config *cfg, const struct req_node *reqNo
 }
 
 static int accessChecker(request_rec *r) {
-    repudiator_config *cfg = (repudiator_config *) ap_get_module_config(r->per_dir_config, &repudiator_module);
+    repudiator_config_t *cfg = (repudiator_config_t *) ap_get_module_config(r->per_dir_config, &repudiator_module);
 
     int ret = OK;
 
@@ -1287,7 +1287,7 @@ static int accessChecker(request_rec *r) {
 
         apr_time_t t = r->request_time / 1000 / 1000;
 
-        struct ip_node addr;
+        ip_node_t addr;
         if (convertAddress(getClientIp(r), &addr) == -1) {
             ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "Couldn't parse ip address");
             return OK;
@@ -1300,7 +1300,7 @@ static int accessChecker(request_rec *r) {
         incASNCount(&cfg->asns, asn, t, cfg->scanTime);
         incNetworkCount(&cfg->networks, &addr, t, cfg->scanTime);
 
-        struct req_node *req = addRequest(cfg, &addr, asn, countryCode, userAgent, r->unparsed_uri, t);
+        req_node_t *req = addRequest(cfg, &addr, asn, countryCode, userAgent, r->unparsed_uri, t);
         if (req == NULL) {
             ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "Couldn't add request: OOM");
             return OK;
@@ -1397,7 +1397,7 @@ static int accessChecker(request_rec *r) {
             }
 
 #ifdef REP_DEBUG
-            if (repState != REP_OK) {
+            if (repState != REP_OK) { 
 #endif
 
             if (cfg->stateTemplate != NULL && !r->header_only) {
@@ -1444,9 +1444,9 @@ static int accessChecker(request_rec *r) {
     return ret;
 }
 
-int doHeaders(const repudiator_config *cfg, request_rec *r, apr_table_t *headers) {
+int doHeaders(const repudiator_config_t *cfg, request_rec *r, apr_table_t *headers) {
     if (cfg->enabled) {
-        struct ip_node addr;
+        ip_node_t addr;
         if (convertAddress(getClientIp(r), &addr) == -1) {
             ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "Couldn't parse ip address");
             return DECLINED;
@@ -1454,7 +1454,7 @@ int doHeaders(const repudiator_config *cfg, request_rec *r, apr_table_t *headers
 
         const long idx = findRequest(&cfg->requests, &addr);
         if (idx != -1) {
-            const struct req_node *req = &cfg->requests.data[idx];
+            const req_node_t *req = &cfg->requests.data[idx];
 
             const int repState = reputationState(cfg, req->reputation);
 
@@ -1473,9 +1473,9 @@ int doHeaders(const repudiator_config *cfg, request_rec *r, apr_table_t *headers
     return OK;
 }
 
-int handleStatusCode(const repudiator_config *cfg, request_rec *r) {
+int handleStatusCode(const repudiator_config_t *cfg, request_rec *r) {
     if (cfg->enabled) {
-        struct ip_node addr;
+        ip_node_t addr;
         if (convertAddress(getClientIp(r), &addr) == -1) {
             ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "Couldn't parse ip address");
             return DECLINED;
@@ -1483,7 +1483,7 @@ int handleStatusCode(const repudiator_config *cfg, request_rec *r) {
 
         const long idx = findRequest(&cfg->requests, &addr);
         if (idx != -1) {
-            struct req_node *req = &cfg->requests.data[idx];
+            req_node_t *req = &cfg->requests.data[idx];
             req->statusReputation += calcStatusReputation(&cfg->statusReputation, r->status);
         }
     }
@@ -1492,7 +1492,7 @@ int handleStatusCode(const repudiator_config *cfg, request_rec *r) {
 }
 
 static apr_status_t headersOutputFilter(ap_filter_t *f, apr_bucket_brigade *in) {
-    repudiator_config *cfg = (repudiator_config *) ap_get_module_config(f->r->per_dir_config, &repudiator_module);
+    repudiator_config_t *cfg = (repudiator_config_t *) ap_get_module_config(f->r->per_dir_config, &repudiator_module);
 
     doHeaders(cfg, f->r, f->r->headers_out);
 
@@ -1504,7 +1504,7 @@ static apr_status_t headersOutputFilter(ap_filter_t *f, apr_bucket_brigade *in) 
 }
 
 static apr_status_t headersErrorFilter(ap_filter_t *f, apr_bucket_brigade *in) {
-    repudiator_config *cfg = (repudiator_config *) ap_get_module_config(f->r->per_dir_config, &repudiator_module);
+    repudiator_config_t *cfg = (repudiator_config_t *) ap_get_module_config(f->r->per_dir_config, &repudiator_module);
 
     doHeaders(cfg, f->r, f->r->err_headers_out);
 
@@ -1546,7 +1546,7 @@ static void powGenerateRandomChallenge(char *challenge, const size_t bytes) {
     srand((unsigned int) time(NULL));
 
     for (size_t i = 0; i < bytes - 1; i++) {
-        challenge[i] = rand();
+        challenge[i] = (char) rand();
     }
     challenge[bytes - 1] = '\0';
 }
@@ -1620,7 +1620,7 @@ static int powCookieHandler(request_rec *r) {
 }
 
 static int powChallenge(request_rec *r) {
-    repudiator_config *cfg = (repudiator_config *) ap_get_module_config(r->per_dir_config, &repudiator_module);
+    repudiator_config_t *cfg = (repudiator_config_t *) ap_get_module_config(r->per_dir_config, &repudiator_module);
 
     if (!r->uri || startsWith(r->uri, cfg->powURI) == 0) return (DECLINED);
 
@@ -1975,10 +1975,10 @@ static void headersInsertErrorFilter(request_rec *r) {
     ap_add_output_filter(FIXUP_HEADERS_ERR_FILTER, NULL, r, r->connection);
 }
 
-static void destroyREVector(struct re_vector *vec) {
+static void destroyREVector(re_vector_t *vec) {
 #ifdef PCRE2
     for (size_t i = 0; i < vec->size; i++) {
-        struct re_node *node = &vec->data[i];
+        re_node_t *node = &vec->data[i];
         pcre2_code_free(node->re);
         pcre2_match_data_free(node->match_data);
     }
@@ -1991,7 +1991,7 @@ static void destroyREVector(struct re_vector *vec) {
 }
 
 static apr_status_t destroyConfig(void *dconfig) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
 
     if (cfg != NULL) {
         free(cfg->ipReputation.data);
@@ -2021,21 +2021,21 @@ static apr_status_t destroyConfig(void *dconfig) {
 }
 
 static void *createDirConf(apr_pool_t *p, __attribute__((unused)) char *context) {
-    repudiator_config *cfg = apr_palloc(p, sizeof(repudiator_config));
+    repudiator_config_t *cfg = apr_palloc(p, sizeof(repudiator_config_t));
     if (!cfg) {
         ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "Failed to allocate configuration");
         return NULL;
     }
 
-    *cfg = (repudiator_config){
+    *cfg = (repudiator_config_t){
         .enabled = 0,
         .asnDBPath = NULL,
         .countryDBPath = NULL,
-        .ipReputation = (struct ip_vector){.data = NULL, .size = 0},
-        .uaReputation = (struct re_vector){.data = NULL, .size = 0},
-        .uriReputation = (struct re_vector){.data = NULL, .size = 0},
-        .asnReputation = (struct asn_vector){.data = NULL, .size = 0},
-        .countryReputation = (struct country_vector){.data = NULL, .size = 0},
+        .ipReputation = (ip_vector_t){.data = NULL, .size = 0},
+        .uaReputation = (re_vector_t){.data = NULL, .size = 0},
+        .uriReputation = (re_vector_t){.data = NULL, .size = 0},
+        .asnReputation = (asn_vector_t){.data = NULL, .size = 0},
+        .countryReputation = (country_vector_t){.data = NULL, .size = 0},
         .warnReputation = DEFAULT_WARN_REPUTATION,
         .blockReputation = DEFAULT_BLOCK_REPUTATION,
         .perIPReputation = DEFAULT_PER_IP_REPUTATION,
@@ -2044,9 +2044,9 @@ static void *createDirConf(apr_pool_t *p, __attribute__((unused)) char *context)
         .scanTime = DEFAULT_SCAN_TIME,
         .warnHttpReply = DEFAULT_WARN_HTTP_REPLY,
         .blockHttpReply = DEFAULT_BLOCK_HTTP_REPLY,
-        .asns = (struct asn_count_vector){.data = NULL, .size = 0},
-        .networks = (struct nw_count_vector){.data = NULL, .size = 0},
-        .requests = (struct req_vector){.data = NULL, .size = 0},
+        .asns = (asn_count_vector_t){.data = NULL, .size = 0},
+        .networks = (nw_count_vector_t){.data = NULL, .size = 0},
+        .requests = (req_vector_t){.data = NULL, .size = 0},
         .stateTemplate = strdup((const char *) state_html_file),
         .powTemplate = strdup((const char *) pow_html_file),
         .powURI = strdup(DEFAULT_POW_URI),
@@ -2062,7 +2062,7 @@ static void *createDirConf(apr_pool_t *p, __attribute__((unused)) char *context)
 }
 
 static const char *setEnabled(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
 
     if (strcmp("true", value) == 0) {
         cfg->enabled = 1;
@@ -2083,7 +2083,7 @@ static apr_status_t cleanupDatabase(void *mmdb) {
 }
 
 static const char *setASNDatabase(cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
 
     cfg->asnDBPath = strdup(value);
 
@@ -2103,7 +2103,7 @@ static const char *setASNDatabase(cmd_parms *cmd, void *dconfig, const char *val
 }
 
 static const char *setCountryDatabase(cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
 
     cfg->countryDBPath = strdup(value);
 
@@ -2124,7 +2124,7 @@ static const char *setCountryDatabase(cmd_parms *cmd, void *dconfig, const char 
 
 static const char *setIPReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value,
                                    const char *value2) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
 
     const int rc = parseIPReputation(&cfg->ipReputation, value, value2);
 
@@ -2140,7 +2140,7 @@ static const char *setIPReputation(__attribute__((unused)) cmd_parms *cmd, void 
 
 static const char *setUAReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value,
                                    const char *value2) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
 
     const int rc = parseRegexReputation(&cfg->uaReputation, value, value2);
 
@@ -2156,7 +2156,7 @@ static const char *setUAReputation(__attribute__((unused)) cmd_parms *cmd, void 
 
 static const char *setURIReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value,
                                     const char *value2) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
 
     const int rc = parseRegexReputation(&cfg->uriReputation, value, value2);
 
@@ -2172,7 +2172,7 @@ static const char *setURIReputation(__attribute__((unused)) cmd_parms *cmd, void
 
 static const char *setASNReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value,
                                     const char *value2) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
 
     const int rc = parseASNReputation(&cfg->asnReputation, value, value2);
 
@@ -2188,7 +2188,7 @@ static const char *setASNReputation(__attribute__((unused)) cmd_parms *cmd, void
 
 static const char *setCountryReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value,
                                         const char *value2) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
 
     const int rc = parseCountryReputation(&cfg->countryReputation, value, value2);
 
@@ -2204,7 +2204,7 @@ static const char *setCountryReputation(__attribute__((unused)) cmd_parms *cmd, 
 
 static const char *setStatusReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value,
                                        const char *value2) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
 
     const int rc = parseStatusReputation(&cfg->statusReputation, value, value2);
 
@@ -2219,7 +2219,7 @@ static const char *setStatusReputation(__attribute__((unused)) cmd_parms *cmd, v
 }
 
 static const char *setWarnReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
     char *endptr;
     double n;
 
@@ -2238,7 +2238,7 @@ static const char *setWarnReputation(__attribute__((unused)) cmd_parms *cmd, voi
 }
 
 static const char *setBlockReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
     char *endptr;
     double n;
 
@@ -2257,7 +2257,7 @@ static const char *setBlockReputation(__attribute__((unused)) cmd_parms *cmd, vo
 }
 
 static const char *setPerIPReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
     char *endptr;
     double n;
 
@@ -2276,7 +2276,7 @@ static const char *setPerIPReputation(__attribute__((unused)) cmd_parms *cmd, vo
 }
 
 static const char *setPerNetworkReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
     char *endptr;
     double n;
 
@@ -2295,7 +2295,7 @@ static const char *setPerNetworkReputation(__attribute__((unused)) cmd_parms *cm
 }
 
 static const char *setPerASNReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
     char *endptr;
     double n;
 
@@ -2314,7 +2314,7 @@ static const char *setPerASNReputation(__attribute__((unused)) cmd_parms *cmd, v
 }
 
 static const char *setScanTime(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
     char *endptr;
     long n;
 
@@ -2333,7 +2333,7 @@ static const char *setScanTime(__attribute__((unused)) cmd_parms *cmd, void *dco
 }
 
 static const char *setWarnHttpReply(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
     char *endptr;
     long n;
 
@@ -2352,7 +2352,7 @@ static const char *setWarnHttpReply(__attribute__((unused)) cmd_parms *cmd, void
 }
 
 static const char *setBlocHttpReply(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
     char *endptr;
     long n;
 
@@ -2371,7 +2371,7 @@ static const char *setBlocHttpReply(__attribute__((unused)) cmd_parms *cmd, void
 }
 
 static const char *setStateTemplateFile(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
 
     FILE *fp = fopen(value, "r");
 
@@ -2396,7 +2396,7 @@ static const char *setStateTemplateFile(__attribute__((unused)) cmd_parms *cmd, 
 }
 
 static const char *setPOWUri(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
 
     if (value != NULL && *value != '\0' && value[0] != '/') {
         cfg->powURI = strdup(value);
@@ -2411,7 +2411,7 @@ static const char *setPOWUri(__attribute__((unused)) cmd_parms *cmd, void *dconf
 }
 
 static const char *setPOWTemplateFile(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
 
     FILE *fp = fopen(value, "r");
 
@@ -2436,7 +2436,7 @@ static const char *setPOWTemplateFile(__attribute__((unused)) cmd_parms *cmd, vo
 }
 
 static const char *setPOWDifficulty(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
     char *endptr;
     long n;
 
@@ -2455,7 +2455,7 @@ static const char *setPOWDifficulty(__attribute__((unused)) cmd_parms *cmd, void
 }
 
 static const char *setPOWCookieMaxAge(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
     char *endptr;
     long n;
 
@@ -2474,7 +2474,7 @@ static const char *setPOWCookieMaxAge(__attribute__((unused)) cmd_parms *cmd, vo
 }
 
 static const char *setPOWAboveReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
     char *endptr;
     double n;
 
@@ -2493,7 +2493,7 @@ static const char *setPOWAboveReputation(__attribute__((unused)) cmd_parms *cmd,
 }
 
 static const char *setPOWBelowReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config *cfg = (repudiator_config *) dconfig;
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
     char *endptr;
     double n;
 
