@@ -1605,8 +1605,10 @@ static int powCookieHandler(request_rec *r) {
             JsonValue *tjson = readValue(&token);
             if (tjson != NULL) {
                 JsonValue *ip = getValue(tjson, "ip");
-                if (ip != NULL && ip->type == TYPE_STRING) {
-                    if (strcmp(ip->stringValue, getClientIp(r)) == 0) {
+                JsonValue *expire = getValue(tjson, "expire");
+                if (ip != NULL && ip->type == TYPE_STRING && expire != NULL && expire->type == TYPE_NUMBER) {
+                    if (strcmp(ip->stringValue, getClientIp(r)) == 0 &&
+                        (unsigned long) expire->numberValue > time(NULL)) {
                         ret = OK;
                     }
                 }
@@ -1689,8 +1691,9 @@ static int powChallenge(request_rec *r) {
                             snprintf(
                                 cookie_val,
                                 sizeof(cookie_val),
-                                "{\"ip\": \"%s\"}",
-                                getClientIp(r)
+                                "{\"ip\": \"%s\", \"expire\": %lu}",
+                                getClientIp(r),
+                                time(NULL) + cfg->powCookieMaxAge
                             );
 
                             ap_cookie_write(r, POW_PASSED_COOKIE, ap_pbase64encode(r->pool, cookie_val),
