@@ -139,10 +139,10 @@ typedef struct {
 typedef struct {
     u_int32_t asn;
     double reputation;
-} asn_node;
+} asn_node_t;
 
 typedef struct {
-    asn_node *data;
+    asn_node_t *data;
     size_t size;
 } asn_vector_t;
 
@@ -747,13 +747,13 @@ static int parseASNReputation(asn_vector_t *asnVector, const char *asn, const ch
     int rc = 0;
 
     if (strlen(asn) != 0 && strlen(rep) != 0) {
-        asn_node *node = reallocArray(asnVector->data, asnVector->size + 1, sizeof(*(asnVector->data)));
+        asn_node_t *node = reallocArray(asnVector->data, asnVector->size + 1, sizeof(*(asnVector->data)));
         if (!node) {
             return -1;
         }
 
         asnVector->data = node;
-        asnVector->data[asnVector->size++] = (asn_node){
+        asnVector->data[asnVector->size++] = (asn_node_t){
             .asn = strtol(asn, NULL, 10),
             .reputation = strtod(rep, NULL)
         };
@@ -861,9 +861,9 @@ double calcRegexReputation(const re_vector_t *reVector, const char *str) {
 }
 
 double calcASNReputation(const asn_vector_t *asnVector, const u_int32_t asn) {
-    const asn_node *wnode = NULL;
+    const asn_node_t *wnode = NULL;
     for (size_t i = 0; i < asnVector->size; ++i) {
-        const asn_node *node = &asnVector->data[i];
+        const asn_node_t *node = &asnVector->data[i];
         if (node->asn == asn) {
             return node->reputation;
         }
