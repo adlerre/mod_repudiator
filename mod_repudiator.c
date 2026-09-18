@@ -24,7 +24,6 @@
 #include <sys/socket.h>
 #include <sys/errno.h>
 #include <unistd.h>
-#include <time.h>
 
 #ifdef PCRE2
 #define PCRE2_CODE_UNIT_WIDTH 8
@@ -36,7 +35,6 @@
 #include "maxminddb.h"
 
 #include "apr.h"
-#include "apr_lib.h"
 #include "apr_strings.h"
 #include "apr_random.h"
 #include "apr_file_io.h"
@@ -2320,7 +2318,7 @@ static const char *setScanTime(__attribute__((unused)) cmd_parms *cmd, void *dco
 
     errno = 0;
     n = strtol(value, &endptr, 0);
-    if (errno || *endptr != '\0') {
+    if (errno || *endptr != '\0' || n < 1) {
         ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
                      "Invalid RepudiatorScanTime value '%s', using default %d.",
                      value, DEFAULT_SCAN_TIME);
@@ -2442,7 +2440,7 @@ static const char *setPOWDifficulty(__attribute__((unused)) cmd_parms *cmd, void
 
     errno = 0;
     n = strtol(value, &endptr, 0);
-    if (errno || *endptr != '\0') {
+    if (errno || *endptr != '\0' || n < 1 || n > 32) {
         ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
                      "Invalid RepudiatorPOWDifficulty value '%s', using default %d.",
                      value, DEFAULT_POW_DIFFICULTY);
