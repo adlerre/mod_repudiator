@@ -1,3 +1,10 @@
+## [1.19.3](https://github.com/adlerre/mod_repudiator/compare/v1.19.2...v1.19.3) (2026-09-18)
+
+
+### Bug Fixes
+
+* version string ([4b0d26e](https://github.com/adlerre/mod_repudiator/commit/4b0d26e4ef4b9251443af5eb1f436a2a510255f8))
+
 ## [1.19.2](https://github.com/adlerre/mod_repudiator/compare/v1.19.1...v1.19.2) (2026-09-18)
 
 
