@@ -1,3 +1,16 @@
+# [1.20.0](https://github.com/adlerre/mod_repudiator/compare/v1.19.3...v1.20.0) (2026-09-18)
+
+
+### Bug Fixes
+
+* check validity of config values ([78a1802](https://github.com/adlerre/mod_repudiator/commit/78a1802a53e15ce939cd2c28da161f0f6d832bbf))
+* version string output ([836f5fd](https://github.com/adlerre/mod_repudiator/commit/836f5fdc18ee82335d486c068a4eb1bbced697bd))
+
+
+### Features
+
+* check also expire value ([b7a20e9](https://github.com/adlerre/mod_repudiator/commit/b7a20e98520d1c3f94d322e7fddb7e962bd4ebe5))
+
 ## [1.19.3](https://github.com/adlerre/mod_repudiator/compare/v1.19.2...v1.19.3) (2026-09-18)
 
 
