@@ -1,3 +1,16 @@
+# [1.19.0](https://github.com/adlerre/mod_repudiator/compare/v1.18.1...v1.19.0) (2026-09-18)
+
+
+### Bug Fixes
+
+* compiler error ([7a08598](https://github.com/adlerre/mod_repudiator/commit/7a085983a220db0eeac17e14bfa2dc8459b8d39c))
+* some possible leaks and overflows ([49517c6](https://github.com/adlerre/mod_repudiator/commit/49517c698176388f855ac872ebe8f715a9ea8ec6))
+
+
+### Features
+
+* output version ([fc74f83](https://github.com/adlerre/mod_repudiator/commit/fc74f834b584e2d435a102798d6301b5e66bed62))
+
 ## [1.18.1](https://github.com/adlerre/mod_repudiator/compare/v1.18.0...v1.18.1) (2026-09-17)
 
 
