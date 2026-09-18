@@ -1,3 +1,10 @@
+## [1.19.1](https://github.com/adlerre/mod_repudiator/compare/v1.19.0...v1.19.1) (2026-09-18)
+
+
+### Bug Fixes
+
+* write of stats file ([39b2f46](https://github.com/adlerre/mod_repudiator/commit/39b2f46ba1268e3884125d96557e5ab5db6ae1e8))
+
 # [1.19.0](https://github.com/adlerre/mod_repudiator/compare/v1.18.1...v1.19.0) (2026-09-18)
 
 
