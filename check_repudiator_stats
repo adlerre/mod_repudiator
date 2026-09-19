@@ -22,16 +22,20 @@ OPTIND=1
 MAGIC_MIME_TYPE="application/x-rep-stats"
 HANDLER="repudiator-stats"
 HOSTNAME="localhost"
+PROTOCOL="http"
 PORT=""
 VERBOSE=0
 ONLY_IPV4=""
 
-while getopts "h:ha:p:v4" opt; do
+while getopts "sh:p:t:v4" opt; do
   case "$opt" in
+  s)
+    PROTOCOL="https"
+    ;;
   h)
     HOSTNAME=$OPTARG
     ;;
-  ha)
+  t)
     HANDLER=$OPTARG
     ;;
   p)
@@ -49,7 +53,7 @@ done
 shift $((OPTIND - 1))
 
 if [[ -n "$HOSTNAME" ]]; then
-  stats=$(curl --header "Accept: $MAGIC_MIME_TYPE" -s http://$HOSTNAME$PORT/$HANDLER $ONLY_IPV4)
+  stats=$(curl --header "Accept: $MAGIC_MIME_TYPE" -s $PROTOCOL://$HOSTNAME$PORT/$HANDLER $ONLY_IPV4)
 
   if [[ -n "$stats" ]]; then
     version=$(echo "$stats" | jq '.version' -r | grep -v "null")
@@ -76,6 +80,6 @@ if [[ -n "$HOSTNAME" ]]; then
     exit 1
   fi
 else
-  echo "$0 -{h [HOSTNAME]} {-ha [HANDLER]} {-p [PORT]} {-v}"
+  echo "$0 {-s Secure} -{h [HOSTNAME]} {-t [HANDLER]} {-p [PORT]} {-v Verbose} {-4 IPv4 only}"
   exit 3
 fi
