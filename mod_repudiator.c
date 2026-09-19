@@ -252,6 +252,7 @@ typedef struct {
     unsigned long blocked;
     unsigned long warned;
     unsigned long powRequests;
+    unsigned long powCIFailed;
     unsigned long powCompleted;
     time_t updated;
 } counters_t;
@@ -393,6 +394,8 @@ static void incNumBlocked();
 static void incNumWarned();
 
 static void incNumPOWRequests();
+
+static void incNumPOWCIFailed();
 
 static void incNumPOWCompleted();
 
@@ -1664,6 +1667,7 @@ static int powChallenge(request_rec *r) {
 
             if (et != NULL && ps != NULL && ci != NULL) {
                 if (powValidateClientInfo(ci) != OK) {
+                    incNumPOWCIFailed();
                     return (DECLINED);
                 }
 
@@ -1822,6 +1826,7 @@ static apr_status_t updateStats() {
             .blocked = 0,
             .warned = 0,
             .powRequests = 0,
+            .powCIFailed = 0,
             .powCompleted = 0
         };
 
@@ -1834,6 +1839,7 @@ static apr_status_t updateStats() {
         counters->blocked += repudiator_counters->counter->blocked;
         counters->warned += repudiator_counters->counter->warned;
         counters->powRequests += repudiator_counters->counter->powRequests;
+        counters->powCIFailed += repudiator_counters->counter->powCIFailed;
         counters->powCompleted += repudiator_counters->counter->powCompleted;
         counters->updated = time(NULL);
 
@@ -1843,6 +1849,7 @@ static apr_status_t updateStats() {
                 .blocked = 0,
                 .warned = 0,
                 .powRequests = 0,
+                .powCIFailed = 0,
                 .powCompleted = 0
             };
 
@@ -1879,6 +1886,12 @@ static void incNumPOWRequests() {
     }
 }
 
+static void incNumPOWCIFailed() {
+    if (repudiator_counters != NULL) {
+        repudiator_counters->counter->powCIFailed++;
+    }
+}
+
 static void incNumPOWCompleted() {
     if (repudiator_counters != NULL) {
         repudiator_counters->counter->powCompleted++;
@@ -1906,9 +1919,9 @@ static int counterStats(request_rec *r) {
     char *version = strReplace(STR(REP_VERSION), "\"", "");
 
     ap_rprintf(r,
-               "{\"version\": \"%s\", \"requests\": %lu, \"blocked\": %lu, \"warned\": %lu, \"powRequests\": %lu, \"powCompleted\": %lu, \"updated\": %lu}\n",
+               "{\"version\": \"%s\", \"requests\": %lu, \"blocked\": %lu, \"warned\": %lu, \"powRequests\": %lu, \"powCIFailed\": %lu, \"powCompleted\": %lu, \"updated\": %lu}\n",
                version, counters->requests, counters->blocked, counters->warned, counters->powRequests,
-               counters->powCompleted, counters->updated
+               counters->powCIFailed, counters->powCompleted, counters->updated
     );
 
     return DONE;
