@@ -99,6 +99,8 @@ module AP_MODULE_DECLARE_DATA repudiator_module;
 
 #define MAX_BUF_LEN 1000000
 
+static const char hex_chars[] = "0123456789ABCDEF";
+
 typedef struct {
     union {
         struct in_addr v4;
@@ -237,6 +239,7 @@ typedef struct {
 
     char *powTemplate;
     char *powURI;
+    char *powCookiePassphrase;
     int powDifficulty;
     int powCookieMaxAge;
     double powAboveReputation;
@@ -281,6 +284,12 @@ static int startsWith(const char *str, const char *prefix);
 
 // https://stackoverflow.com/questions/779875/what-function-is-to-replace-a-substring-from-a-string-in-c
 static char *strReplace(char *orig, char *rep, char *with);
+
+static char *bin_to_hex(const unsigned char *data, size_t len);
+
+static int hex_value(char c);
+
+static unsigned char *hex_to_bin(const char *hex, size_t hex_len, size_t *out_len);
 
 static uint32_t prefix2mask(int prefix);
 
@@ -364,6 +373,12 @@ static apr_status_t headersErrorFilter(ap_filter_t *f, apr_bucket_brigade *in);
 // --------------------------------------------------------------------------------------------------------------------
 
 static int countLeadingZeroBits(const uint8_t *hash, size_t nbytes);
+
+static void xorCrypt(char *data, size_t length, const char *key, size_t key_length);
+
+static char *xorEncrypt(const char *data, const char *passphrase);
+
+static char *xorDecrypt(const char *data, const char *passphrase);
 
 static void powGenerateRandomChallenge(char *challenge, size_t bytes);
 
@@ -463,6 +478,69 @@ static char *strReplace(char *orig, char *rep, char *with) {
     }
     strcpy(tmp, orig);
     return result;
+}
+
+static char *bin_to_hex(const unsigned char *data, const size_t len) {
+    if (data == NULL && len != 0)
+        return NULL;
+
+    char *hex = (char *) malloc(len * 2 + 1);
+    if (hex == NULL)
+        return NULL;
+
+    for (size_t i = 0; i < len; i++) {
+        hex[i * 2] = hex_chars[data[i] >> 4];
+        hex[i * 2 + 1] = hex_chars[data[i] & 0x0F];
+    }
+
+    hex[len * 2] = '\0';
+
+    return hex;
+}
+
+static int hex_value(char c) {
+    if (c >= '0' && c <= '9')
+        return c - '0';
+
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+
+    if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+
+    return -1;
+}
+
+unsigned char *hex_to_bin(const char *hex, size_t hex_len, size_t *out_len) {
+    if (hex == NULL || out_len == NULL)
+        return NULL;
+
+    if ((hex_len & 1) != 0)
+        return NULL;
+
+    *out_len = hex_len / 2;
+
+    if (*out_len == 0)
+        return NULL;
+
+    unsigned char *data = (unsigned char *) malloc(*out_len);
+    if (data == NULL)
+        return NULL;
+
+    for (size_t i = 0; i < *out_len; i++) {
+        int hi = hex_value(hex[i * 2]);
+        int lo = hex_value(hex[i * 2 + 1]);
+
+        if (hi < 0 || lo < 0) {
+            free(data);
+            *out_len = 0;
+            return NULL;
+        }
+
+        data[i] = (unsigned char) ((hi << 4) | lo);
+    }
+
+    return data;
 }
 
 static void qsToTable(const char *input, apr_table_t *parms, apr_pool_t *p) {
@@ -1539,6 +1617,39 @@ int countLeadingZeroBits(const uint8_t *hash, size_t nbytes) {
     return zeroBits;
 }
 
+static void xorCrypt(char *data, const size_t length, const char *key, const size_t key_length) {
+    size_t i;
+
+    if (data == NULL || key == NULL || key_length == 0) {
+        return;
+    }
+
+    for (i = 0; i < length; ++i) {
+        data[i] ^= key[i % key_length];
+    }
+}
+
+static char *xorEncrypt(const char *data, const char *passphrase) {
+    const size_t len = strlen(data);
+    char *tmp = strdup(data);
+
+    xorCrypt(tmp, len, passphrase, strlen(passphrase));
+    char *hex = bin_to_hex((unsigned char *) tmp, len);
+    free(tmp);
+
+    return hex;
+}
+
+static char *xorDecrypt(const char *data, const char *passphrase) {
+    size_t outlen;
+    const size_t len = strlen(data);
+
+    char *decoded = (char *) hex_to_bin(data, len, &outlen);
+    xorCrypt(decoded, outlen, passphrase, strlen(passphrase));
+
+    return decoded;
+}
+
 static void powGenerateRandomChallenge(char *challenge, const size_t bytes) {
     if (challenge == NULL || bytes == 0) {
         return;
@@ -1601,9 +1712,14 @@ static int powCookieHandler(request_rec *r) {
     int ret = DECLINED;
     const char *cookie_value = NULL;
 
+    repudiator_config_t *cfg = (repudiator_config_t *) ap_get_module_config(r->per_dir_config, &repudiator_module);
+
     apr_status_t status = ap_cookie_read(r, POW_PASSED_COOKIE, &cookie_value, 0);
     if (status == APR_SUCCESS && cookie_value != NULL) {
-        const char *token = ap_pbase64decode(r->pool, cookie_value);
+        const char *token = cfg->powCookiePassphrase != NULL
+                                ? xorDecrypt(ap_pbase64decode(r->pool, cookie_value), cfg->powCookiePassphrase)
+                                : ap_pbase64decode(r->pool, cookie_value);
+
         if (token != NULL) {
             JsonValue *tjson = readValue(&token);
             if (tjson != NULL) {
@@ -1690,7 +1806,7 @@ static int powChallenge(request_rec *r) {
 
                         const int zeroBits = countLeadingZeroBits(hex, SHA256_BYTES_SIZE);
                         if (zeroBits >= difficulty->numberValue) {
-                            char cookie_val[255] = {0};
+                            char cookie_val[HUGE_STRING_LEN] = {0};
 
                             snprintf(
                                 cookie_val,
@@ -1700,7 +1816,11 @@ static int powChallenge(request_rec *r) {
                                 time(NULL) + cfg->powCookieMaxAge
                             );
 
-                            ap_cookie_write(r, POW_PASSED_COOKIE, ap_pbase64encode(r->pool, cookie_val),
+                            ap_cookie_write(r, POW_PASSED_COOKIE,
+                                            ap_pbase64encode(
+                                                r->pool, cfg->powCookiePassphrase != NULL
+                                                             ? xorEncrypt(cookie_val, cfg->powCookiePassphrase)
+                                                             : cookie_val),
                                             "Path=/; HttpOnly; SameSite=lax;",
                                             cfg->powCookieMaxAge, r->headers_out, r->err_headers_out,
                                             NULL);
@@ -2032,6 +2152,9 @@ static apr_status_t destroyConfig(void *dconfig) {
         free(cfg->stateTemplate);
         free(cfg->powTemplate);
         free(cfg->powURI);
+        if (cfg->powCookiePassphrase != NULL) {
+            free(cfg->powCookiePassphrase);
+        }
     }
     return APR_SUCCESS;
 }
@@ -2066,6 +2189,7 @@ static void *createDirConf(apr_pool_t *p, __attribute__((unused)) char *context)
         .stateTemplate = strdup((const char *) state_html_file),
         .powTemplate = strdup((const char *) pow_html_file),
         .powURI = strdup(DEFAULT_POW_URI),
+        .powCookiePassphrase = NULL,
         .powDifficulty = DEFAULT_POW_DIFFICULTY,
         .powCookieMaxAge = DEFAULT_POW_COOKIE_MAXAGE,
         .powAboveReputation = DEFAULT_POW_ABOVE_REPUTATION,
@@ -2451,6 +2575,16 @@ static const char *setPOWTemplateFile(__attribute__((unused)) cmd_parms *cmd, vo
     return NULL;
 }
 
+static const char *setPOWCookiePassphrase(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
+    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+
+    if (value != NULL && *value != '\0') {
+        cfg->powCookiePassphrase = strdup(value);
+    }
+
+    return NULL;
+}
+
 static const char *setPOWDifficulty(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
     repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
     char *endptr;
@@ -2570,6 +2704,8 @@ static const command_rec configCmds[] = {
     AP_INIT_TAKE1("RepudiatorPOWUri", setPOWUri, NULL, RSRC_CONF, "POW URI"),
 
     AP_INIT_TAKE1("RepudiatorPOWTemplateFile", setPOWTemplateFile, NULL, RSRC_CONF, "POW template file"),
+
+    AP_INIT_TAKE1("RepudiatorPOWCookiePassphrase", setPOWCookiePassphrase, NULL, RSRC_CONF, "POW Cookie passphrase"),
 
     AP_INIT_TAKE1("RepudiatorPOWDifficulty", setPOWDifficulty, NULL, RSRC_CONF, "POW Challenge difficulty"),
 

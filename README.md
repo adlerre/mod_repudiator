@@ -37,6 +37,7 @@ Runtime (APR), libmaxminddb and, optionally, PCRE2.
 - configurable warning and blocking thresholds
 - configurable HTTP response codes
 - optional Proof-of-Work challenge
+- optional passphrase-based encoding of the POW cookie
 - MaxMind database integration for ASN and country lookups
 - optional PCRE2 regex engine
 - `X-Reputation` response header
@@ -106,12 +107,14 @@ client IP and is valid for the configured period.
 
 The default POW settings are:
 
-| Setting                        |              Default |
-|--------------------------------|---------------------:|
-| `RepudiatorPOWUri`             | `/rep-pow-challenge` |
-| `RepudiatorPOWCookieMaxAge`    |       `3600` seconds |
-| `RepudiatorPOWAboveReputation` |             `-150.0` |
-| `RepudiatorPOWBelowReputation` |            `-1000.0` |
+| Setting                         | Default              | Meaning                                     |
+|---------------------------------|----------------------|---------------------------------------------|
+| `RepudiatorPOWUri`              | `/rep-pow-challenge` | POW challenge URI                           |
+| `RepudiatorPOWCookiePassphrase` | `not set`            | Optional passphrase for POW cookie encoding |
+| `RepudiatorPOWDifficulty`       | `16`                 | Required leading zero bits                  |
+| `RepudiatorPOWCookieMaxAge`     | `3600` seconds       | POW cookie lifetime                         |
+| `RepudiatorPOWAboveReputation`  | `-150.0`             | Upper POW reputation boundary               |
+| `RepudiatorPOWBelowReputation`  | `-1000.0`            | Lower POW reputation boundary               |
 
 The challenge template is supplied through `RepudiatorPOWTemplateFile`.
 
@@ -533,9 +536,27 @@ The template uses the following placeholder:
 
 The placeholder receives a Base64 encoded JSON challenge token.
 
+#### `RepudiatorPOWCookiePassphrase`
+
+Sets an optional passphrase used to XOR-encode the POW cookie payload before
+Base64 encoding. If no passphrase is configured, the cookie payload is only
+Base64 encoded.
+
+Example:
+
+```apache
+RepudiatorPOWCookiePassphrase change-this-secret
+```
+
+The passphrase is server-side configuration and is not sent to the client. The
+implementation uses XOR encoding for obfuscation; this setting should not be
+considered a replacement for authenticated encryption or a cryptographic
+signature.
+
 #### `RepudiatorPOWDifficulty`
 
-Sets the difficulty of the POW challenge.
+Sets the difficulty of the POW challenge. The configured value must be between
+`1` and `32` inclusive.
 
 Default:
 
@@ -627,6 +648,8 @@ RepudiatorCountryReputation DE 100.0
 RepudiatorStatusReputation 404 -1.0
 
 RepudiatorPOWUri /rep-pow-challenge
+RepudiatorPOWCookiePassphrase change-this-secret
+RepudiatorPOWDifficulty 16
 RepudiatorPOWCookieMaxAge 3600
 RepudiatorPOWAboveReputation -150
 RepudiatorPOWBelowReputation -1000
@@ -701,8 +724,8 @@ classification and score to downstream components.
 ## Statistics
 
 `mod_repudiator` maintains persistent aggregate counters for requests, warnings,
-blocks and Proof-of-Work activity. The statistics are stored in the Apache runtime
-directory in the binary file:
+blocks and Proof-of-Work activity, including failed POW client-information checks.
+The statistics are stored in the Apache runtime directory in the binary file:
 
 ```text
 repudiator_stats
@@ -715,7 +738,6 @@ flushes in-process counters to this file.
 ### Statistics handler
 
 The module provides the handler names `repudiator-stats` and
-
 `application/x-rep-stats`. A GET request returns JSON. For example:
 
 ```apache
@@ -728,10 +750,12 @@ The response has the following structure:
 
 ```json
 {
+  "version": "dev",
   "requests": 12345,
   "blocked": 42,
   "warned": 123,
   "powRequests": 456,
+  "powCIFailed": 7,
   "powCompleted": 321,
   "updated": 1726500000
 }
@@ -741,19 +765,22 @@ The fields are:
 
 | Field          | Description                                                     |
 |----------------|-----------------------------------------------------------------|
+| `version`      | Module version reported by `REP_VERSION`                        |
 | `requests`     | Number of processed requests recorded by the persistent counter |
 | `blocked`      | Number of requests classified as `BLOCK`                        |
 | `warned`       | Number of requests classified as `WARN`                         |
 | `powRequests`  | Number of POW challenge requests generated                      |
+| `powCIFailed`  | Number of POW submissions rejected by client-information checks |
 | `powCompleted` | Number of successfully completed POW challenges                 |
 | `updated`      | Unix timestamp of the last statistics update                    |
 
 If the statistics file cannot be opened during module initialization, statistics
 processing is disabled and the module logs a warning. The statistics handler then
 returns `404`.
-> > **Security:** Do not expose the statistics handler publicly unless the returned
-> > aggregate traffic information is intentionally public. Restrict the location with
-> > your normal Apache access-control mechanisms when necessary.
+
+> **Security:** Do not expose the statistics handler publicly unless the returned
+> aggregate traffic information is intentionally public. Restrict the location with
+> your normal Apache access-control mechanisms when necessary.
 
 ## Logging
 
@@ -791,12 +818,12 @@ Then add a jail to `/etc/fail2ban/jail.local`:
 [apache-mod_repudiator]
 enabled = true
 backend = polling
-port    = http,https
-filter  = apache-mod_repudiator
+port = http,https
+filter = apache-mod_repudiator
 logpath = /var/log/httpd/error_log
 maxretry = 1
 findtime = 120
-bantime  = 600
+bantime = 600
 ```
 
 Restart fail2ban:
@@ -893,7 +920,7 @@ apachectl configtest
 Then inspect the Apache error log while generating test traffic.
 
 When changing the module, also test the statistics handler and verify that
-`requests`, `warned`, `blocked`, `powRequests` and `powCompleted` are updated as
+`requests`, `warned`, `blocked`, `powRequests`, `powCIFailed` and `powCompleted` are updated as
 expected. The persistent statistics update is throttled to approximately once per
 second.
 
