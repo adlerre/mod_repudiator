@@ -1,3 +1,13 @@
+# [1.21.0](https://github.com/adlerre/mod_repudiator/compare/v1.20.0...v1.21.0) (2026-09-19)
+
+
+### Features
+
+* count failed client information checks ([4d3789a](https://github.com/adlerre/mod_repudiator/commit/4d3789a7696eac1bd64b090a20037e2aea02eec3))
+* implement cookie pseudo encryption ([#16](https://github.com/adlerre/mod_repudiator/issues/16)) ([5742eb3](https://github.com/adlerre/mod_repudiator/commit/5742eb3d6ae19ee7b31b44b6a801860ad8605f35))
+* output failed client information checks ([1335047](https://github.com/adlerre/mod_repudiator/commit/13350471a47fd2036c8a4538693f094940714dac))
+* output failed client information checks ([4ff2bde](https://github.com/adlerre/mod_repudiator/commit/4ff2bded3ea18faf2e51b2f812429fe72effd7fd))
+
 # [1.20.0](https://github.com/adlerre/mod_repudiator/compare/v1.19.3...v1.20.0) (2026-09-18)
 
 
