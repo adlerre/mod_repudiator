@@ -1703,6 +1703,12 @@ static int powValidateClientInfo(const char *ci) {
             colorDepth->type == TYPE_NUMBER && colorDepth->numberValue == 0) {
             return DECLINED;
         }
+
+        JsonValue *languages = getValue(cijson, "languages");
+        if (languages != NULL &&
+            languages->type == TYPE_ARRAY && languages->arrayValue.count == 0) {
+            return DECLINED;
+        }
     }
 
     return OK;
