@@ -67,7 +67,7 @@ if [[ -n "$HOSTNAME" ]]; then
     [ $blocked -ne 0 ] && perBlocked=$(awk -v x="$requests" -v y="$blocked" 'BEGIN {printf "%.2f", 100 / x * y}') || perBlocked=0
     [ $warned -ne 0 ] && perWarned=$(awk -v x="$requests" -v y="$warned" 'BEGIN {printf "%.2f", 100 / x * y}') || perWarned=0
     [ $powRequests -ne 0 ] && perPOWRequests=$(awk -v x="$requests" -v y="$powRequests" 'BEGIN {printf "%.2f", 100 / x * y}') || perPOWRequests=0
-    [ $powCIFailed -ne 0 ] && perPOWCIFailed=$(awk -v x="$powRequests" -v y="powCIFailed" 'BEGIN {printf "%.2f", 100 / x * y}') || perPOWCIFailed=0
+    [ $powCIFailed -ne 0 ] && perPOWCIFailed=$(awk -v x="$powRequests" -v y="$powCIFailed" 'BEGIN {printf "%.2f", 100 / x * y}') || perPOWCIFailed=0
     [ $powCompleted -ne 0 ] && perPOWCompleted=$(awk -v x="$powRequests" -v y="$powCompleted" 'BEGIN {printf "%.2f", 100 / x * y}') || perPOWCompleted=0
 
     [ $VERBOSE -gt 0 ] && echo $stats
