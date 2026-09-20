@@ -1,3 +1,15 @@
+# [1.22.0](https://github.com/adlerre/mod_repudiator/compare/v1.21.0...v1.22.0) (2026-09-20)
+
+
+### Bug Fixes
+
+* variable usage ([ac8ffd6](https://github.com/adlerre/mod_repudiator/commit/ac8ffd64a6ab1f8a10fe704168d2996925eb066c))
+
+
+### Features
+
+* check also languages ([34c9a2d](https://github.com/adlerre/mod_repudiator/commit/34c9a2d8d1bf8f95a02e7c83ccae1a3e49560cb8))
+
 # [1.21.0](https://github.com/adlerre/mod_repudiator/compare/v1.20.0...v1.21.0) (2026-09-19)
 
 
