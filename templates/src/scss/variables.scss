@@ -30,6 +30,8 @@ $colors: (
 
   --ui-body-margin-width: 0.5rem;
 
+  --ui-progressbar-color: #c0c0c0;
+
   @each $name, $color in $colors {
     --ui-#{$name}: #{$color};
     --ui-#{$name}-rgb: #{toRGB($color)};
@@ -42,5 +44,7 @@ $colors: (
     --ui-body-color: #dee2e6;
 
     --ui-logo-color: white;
+
+    --ui-progressbar-color: #2b2f40;
   }
 }
