@@ -1,3 +1,10 @@
+## [1.22.1](https://github.com/adlerre/mod_repudiator/compare/v1.22.0...v1.22.1) (2026-09-23)
+
+
+### Bug Fixes
+
+* progressbar color ([b9b7e72](https://github.com/adlerre/mod_repudiator/commit/b9b7e72eef80bc396299fc96b7ce1053a4bf12f8))
+
 # [1.22.0](https://github.com/adlerre/mod_repudiator/compare/v1.21.0...v1.22.0) (2026-09-20)
 
 
