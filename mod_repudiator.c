@@ -1150,7 +1150,9 @@ int removeRequest(req_vector_t *requests, const size_t idx) {
     if (requests == NULL || idx >= requests->size || requests->data == NULL) {
         return -1;
     }
-    free(requests->data[idx].countryCode);
+    if (requests->data[idx].countryCode != NULL) {
+        free(requests->data[idx].countryCode);
+    }
     requests->data[idx].countryCode = NULL;
     for (size_t i = idx; i + 1 < requests->size; ++i) {
         requests->data[i] = requests->data[i + 1];
