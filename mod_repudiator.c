@@ -317,52 +317,54 @@ static int parseCountryReputation(country_vector_t *countryVector, const char *c
 
 static int parseStatusReputation(status_vector_t *statusVector, const char *ret, const char *rep);
 
-double calcIPReputation(const ip_vector_t *ipReputation, const ip_node_t *ipNode);
+static double calcIPReputation(const ip_vector_t *ipReputation, const ip_node_t *ipNode);
 
-double calcRegexReputation(const re_vector_t *reVector, const char *str);
+static double calcRegexReputation(const re_vector_t *reVector, const char *str);
 
-double calcASNReputation(const asn_vector_t *asnVector, u_int32_t asn);
+static double calcASNReputation(const asn_vector_t *asnVector, u_int32_t asn);
 
-double calcCountryReputation(const country_vector_t *countryVector, const char *code);
+static double calcCountryReputation(const country_vector_t *countryVector, const char *code);
 
-double calcStatusReputation(const status_vector_t *statusVector, u_int32_t status);
+static double calcStatusReputation(const status_vector_t *statusVector, u_int32_t status);
 
-uint32_t lookupIPInfo(MMDB_s *mmdb, ip_node_t *node);
+static uint32_t lookupIPInfo(MMDB_s *mmdb, ip_node_t *node);
 
-char *lookupCountryInfo(MMDB_s *mmdb, ip_node_t *node);
+static char *lookupCountryInfo(MMDB_s *mmdb, ip_node_t *node);
 
-long findRequest(const req_vector_t *requests, const ip_node_t *ip);
+static long findRequest(const req_vector_t *requests, const ip_node_t *ip);
 
-req_node_t *addRequest(repudiator_config_t *cfg, const ip_node_t *ip, uint32_t asn, const char *countryCode,
-                       const char *userAgent, const char *uri, time_t timestamp);
+static req_node_t *addRequest(repudiator_config_t *cfg, const ip_node_t *ip, uint32_t asn, const char *countryCode,
+                              const char *userAgent, const char *uri, time_t timestamp);
 
-int removeRequest(req_vector_t *requests, size_t idx);
+static int removeRequest(req_vector_t *requests, size_t idx);
 
-long findNetwork(const nw_count_vector_t *networks, const ip_node_t *addr);
+static void cleanRequests(req_vector_t *requests, time_t before);
 
-int removeNetwork(nw_count_vector_t *networks, size_t idx);
+static long findNetwork(const nw_count_vector_t *networks, const ip_node_t *addr);
 
-int incNetworkCount(nw_count_vector_t *networks, const ip_node_t *addr, time_t update, time_t scanTime);
+static int removeNetwork(nw_count_vector_t *networks, size_t idx);
 
-void cleanNetworks(nw_count_vector_t *networks, time_t before);
+static int incNetworkCount(nw_count_vector_t *networks, const ip_node_t *addr, time_t update, time_t scanTime);
 
-long findASN(const asn_count_vector_t *asns, u_int32_t asn);
+static void cleanNetworks(nw_count_vector_t *networks, time_t before);
 
-int removeASN(asn_count_vector_t *asns, size_t idx);
+static long findASN(const asn_count_vector_t *asns, u_int32_t asn);
 
-int incASNCount(asn_count_vector_t *asns, u_int32_t asn, time_t update, time_t scanTime);
+static int removeASN(asn_count_vector_t *asns, size_t idx);
 
-void cleanASNs(asn_count_vector_t *asns, time_t before);
+static int incASNCount(asn_count_vector_t *asns, u_int32_t asn, time_t update, time_t scanTime);
 
-int reputationState(const repudiator_config_t *cfg, double reputation);
+static void cleanASNs(asn_count_vector_t *asns, time_t before);
 
-double calcReputation(const repudiator_config_t *cfg, const req_node_t *reqNode, int type);
+static int reputationState(const repudiator_config_t *cfg, double reputation);
+
+static double calcReputation(const repudiator_config_t *cfg, const req_node_t *reqNode, int type);
 
 static int accessChecker(request_rec *r);
 
-int doHeaders(const repudiator_config_t *cfg, request_rec *r, apr_table_t *headers);
+static int doHeaders(const repudiator_config_t *cfg, request_rec *r, apr_table_t *headers);
 
-int handleStatusCode(const repudiator_config_t *cfg, request_rec *r);
+static int handleStatusCode(const repudiator_config_t *cfg, request_rec *r);
 
 static apr_status_t headersOutputFilter(ap_filter_t *f, apr_bucket_brigade *in);
 
@@ -1168,6 +1170,18 @@ int removeRequest(req_vector_t *requests, const size_t idx) {
     return 0;
 }
 
+static void cleanRequests(req_vector_t *requests, const time_t before) {
+    size_t idx = 0;
+    while (idx < requests->size) {
+        req_node_t *node = &requests->data[idx];
+        if (node != NULL && node->lastSeen < before) {
+            removeRequest(requests, idx);
+        } else {
+            idx++;
+        }
+    }
+}
+
 long findNetwork(const nw_count_vector_t *networks, const ip_node_t *addr) {
     long idx = -1;
 
@@ -1432,6 +1446,7 @@ static int accessChecker(request_rec *r) {
 
         cleanASNs(&cfg->asns, t - cfg->scanTime * 2);
         cleanNetworks(&cfg->networks, t - cfg->scanTime * 2);
+        cleanRequests(&cfg->requests, t - cfg->scanTime * 2);
 
 #ifndef REP_DEBUG
         if (repState != REP_OK) {
