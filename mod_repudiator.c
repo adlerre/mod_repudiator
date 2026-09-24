@@ -173,6 +173,8 @@ typedef struct {
 } asn_count_t;
 
 typedef struct {
+    apr_pool_t *pool;
+
     asn_count_t *data;
     size_t size;
 } asn_count_vector_t;
@@ -184,6 +186,8 @@ typedef struct {
 } nw_count_t;
 
 typedef struct {
+    apr_pool_t *pool;
+
     nw_count_t *data;
     size_t size;
 } nw_count_vector_t;
@@ -206,6 +210,8 @@ typedef struct {
 } req_node_t;
 
 typedef struct {
+    apr_pool_t *pool;
+
     req_node_t *data;
     size_t size;
 } req_vector_t;
@@ -233,9 +239,6 @@ typedef struct {
 
     MMDB_s *mmdbASN;
     MMDB_s *mmdbCountry;
-    asn_count_vector_t asns;
-    nw_count_vector_t networks;
-    req_vector_t requests;
 
     char *stateTemplate;
 
@@ -247,6 +250,10 @@ typedef struct {
     double powAboveReputation;
     double powBelowReputation;
 } repudiator_config_t;
+
+static asn_count_vector_t *repudiator_asns;
+static nw_count_vector_t *repudiator_networks;
+static req_vector_t *repudiator_requests = NULL;
 
 // --------------------------------------------------------------------------------------------------------------------
 // Counters
@@ -1077,17 +1084,21 @@ char *lookupCountryInfo(const MMDB_s *mmdb, const ip_node_t *node) {
 
 long findRequest(const req_vector_t *requests, const ip_node_t *ip) {
     long idx = -1;
-    for (size_t i = 0; i < requests->size; ++i) {
-        const req_node_t *node = &requests->data[i];
-        if (node->addr.family == ip->family) {
-            if ((node->addr.family == AF_INET && node->addr.ip.v4.s_addr == ip->ip.v4.s_addr) ||
-                (node->addr.family == AF_INET6 &&
-                 memcmp(&node->addr.ip.v6, &ip->ip.v6, sizeof(node->addr.ip.v6)) == 0)) {
-                idx = (long) i;
-                break;
+
+    if (requests != NULL) {
+        for (size_t i = 0; i < requests->size; ++i) {
+            const req_node_t *node = &requests->data[i];
+            if (node->addr.family == ip->family) {
+                if ((node->addr.family == AF_INET && node->addr.ip.v4.s_addr == ip->ip.v4.s_addr) ||
+                    (node->addr.family == AF_INET6 &&
+                     memcmp(&node->addr.ip.v6, &ip->ip.v6, sizeof(node->addr.ip.v6)) == 0)) {
+                    idx = (long) i;
+                    break;
+                }
             }
         }
     }
+
     return idx;
 }
 
@@ -1098,23 +1109,24 @@ req_node_t *addRequest(repudiator_config_t *cfg, const ip_node_t *ip, const uint
         return NULL;
     }
 
-    const long idx = findRequest(&cfg->requests, ip);
+    const long idx = findRequest(repudiator_requests, ip);
     if (idx == -1) {
-        req_node_t *node = reallocArray(cfg->requests.data, cfg->requests.size + 1, sizeof(*(cfg->requests.data)));
+        req_node_t *node = reallocArray(repudiator_requests->data, repudiator_requests->size + 1,
+                                        sizeof(*(repudiator_requests->data)));
         if (node == NULL) {
             return NULL;
         }
 
-        cfg->requests.data = node;
-        cfg->requests.data[cfg->requests.size++] = (req_node_t){
+        repudiator_requests->data = node;
+        repudiator_requests->data[repudiator_requests->size++] = (req_node_t){
             .asn = asn,
-            .countryCode = countryCode != NULL ? apr_pstrdup(cfg->pool, countryCode) : NULL,
+            .countryCode = countryCode != NULL ? apr_pstrdup(repudiator_requests->pool, countryCode) : NULL,
             .addr = *ip,
             .count = 1,
             .lastSeen = timestamp
         };
 
-        node = &cfg->requests.data[cfg->requests.size - 1];
+        node = &repudiator_requests->data[repudiator_requests->size - 1];
         node->ipReputation = calcIPReputation(&cfg->ipReputation, ip);
         node->uaReputation = calcRegexReputation(&cfg->uaReputation, userAgent);
         node->uriReputation = calcRegexReputation(&cfg->uriReputation, uri);
@@ -1123,7 +1135,7 @@ req_node_t *addRequest(repudiator_config_t *cfg, const ip_node_t *ip, const uint
         return node;
     }
 
-    req_node_t *node = &cfg->requests.data[idx];
+    req_node_t *node = &repudiator_requests->data[idx];
 
     if (node->lastSeen > timestamp - cfg->scanTime) {
         if (node->count == SIZE_MAX) {
@@ -1152,9 +1164,7 @@ int removeRequest(req_vector_t *requests, const size_t idx) {
     if (requests == NULL || idx >= requests->size || requests->data == NULL) {
         return -1;
     }
-    if (requests->data[idx].countryCode != NULL) {
-        free(requests->data[idx].countryCode);
-    }
+
     requests->data[idx].countryCode = NULL;
     for (size_t i = idx; i + 1 < requests->size; ++i) {
         requests->data[i] = requests->data[i + 1];
@@ -1189,11 +1199,13 @@ static void cleanRequests(req_vector_t *requests, const time_t before) {
 long findNetwork(const nw_count_vector_t *networks, const ip_node_t *addr) {
     long idx = -1;
 
-    for (size_t i = 0; i < networks->size; ++i) {
-        const nw_count_t *node = &networks->data[i];
-        if (isInRange(&node->addr, addr)) {
-            idx = (long) i;
-            break;
+    if (networks != NULL) {
+        for (size_t i = 0; i < networks->size; ++i) {
+            const nw_count_t *node = &networks->data[i];
+            if (isInRange(&node->addr, addr)) {
+                idx = (long) i;
+                break;
+            }
         }
     }
 
@@ -1250,13 +1262,15 @@ int incNetworkCount(nw_count_vector_t *networks, const ip_node_t *addr, const ti
 }
 
 void cleanNetworks(nw_count_vector_t *networks, const time_t before) {
-    size_t idx = 0;
-    while (idx < networks->size) {
-        const nw_count_t *node = &networks->data[idx];
-        if (node->lastSeen < before) {
-            removeNetwork(networks, idx);
-        } else {
-            idx++;
+    if (networks != NULL) {
+        size_t idx = 0;
+        while (idx < networks->size) {
+            const nw_count_t *node = &networks->data[idx];
+            if (node->lastSeen < before) {
+                removeNetwork(networks, idx);
+            } else {
+                idx++;
+            }
         }
     }
 }
@@ -1264,11 +1278,13 @@ void cleanNetworks(nw_count_vector_t *networks, const time_t before) {
 long findASN(const asn_count_vector_t *asns, const u_int32_t asn) {
     long idx = -1;
 
-    for (size_t i = 0; i < asns->size; ++i) {
-        const asn_count_t *node = &asns->data[i];
-        if (node->asn == asn) {
-            idx = (long) i;
-            break;
+    if (asns != NULL && asns->data != NULL) {
+        for (size_t i = 0; i < asns->size; ++i) {
+            const asn_count_t *node = &asns->data[i];
+            if (node->asn == asn) {
+                idx = (long) i;
+                break;
+            }
         }
     }
 
@@ -1361,12 +1377,12 @@ double calcReputation(const repudiator_config_t *cfg, const req_node_t *reqNode,
         case 1:
             return cfg->perIPReputation * (double) reqNode->count;
         case 2:
-            idx = findNetwork(&cfg->networks, &reqNode->addr);
-            return idx != -1 ? cfg->perNetworkReputation * (double) cfg->networks.data[idx].count : 0;
+            idx = findNetwork(repudiator_networks, &reqNode->addr);
+            return idx != -1 ? cfg->perNetworkReputation * (double) repudiator_networks->data[idx].count : 0;
         case 3:
-            idx = findASN(&cfg->asns, reqNode->asn);
+            idx = findASN(repudiator_asns, reqNode->asn);
             return reqNode->asn != 0 && idx != -1
-                       ? cfg->perASNReputation * (double) cfg->asns.data[idx].count
+                       ? cfg->perASNReputation * (double) repudiator_asns->data[idx].count
                        : 0.0;
         default:
             return (reqNode->ipReputation + reqNode->uaReputation + reqNode->uriReputation + reqNode->asnReputation +
@@ -1394,8 +1410,8 @@ static int accessChecker(request_rec *r) {
         const char *countryCode = lookupCountryInfo(cfg->mmdbCountry, &addr);
         const char *userAgent = apr_table_get(r->headers_in, "user-agent");
 
-        incASNCount(&cfg->asns, asn, t, cfg->scanTime);
-        incNetworkCount(&cfg->networks, &addr, t, cfg->scanTime);
+        incASNCount(repudiator_asns, asn, t, cfg->scanTime);
+        incNetworkCount(repudiator_networks, &addr, t, cfg->scanTime);
 
         req_node_t *req = addRequest(cfg, &addr, asn, countryCode, userAgent, r->unparsed_uri, t);
         if (req == NULL) {
@@ -1441,16 +1457,16 @@ static int accessChecker(request_rec *r) {
         }
 
 #ifdef REP_DEBUG
-        long idx = findNetwork(&cfg->networks, &addr);
-        const size_t nwCount = idx != -1 ? cfg->networks.data[idx].count : 0;
+        long idx = findNetwork(repudiator_networks, &addr);
+        const size_t nwCount = idx != -1 ? repudiator_networks->data[idx].count : 0;
 
-        idx = findASN(&cfg->asns, req->asn);
-        const size_t asnCount = idx != -1 ? cfg->asns.data[idx].count : 0;
+        idx = findASN(repudiator_asns, req->asn);
+        const size_t asnCount = idx != -1 ? repudiator_asns->data[idx].count : 0;
 #endif
 
-        cleanASNs(&cfg->asns, t - cfg->scanTime * 2);
-        cleanNetworks(&cfg->networks, t - cfg->scanTime * 2);
-        cleanRequests(&cfg->requests, t - cfg->scanTime * 2);
+        cleanASNs(repudiator_asns, t - cfg->scanTime * 2);
+        cleanNetworks(repudiator_networks, t - cfg->scanTime * 2);
+        cleanRequests(repudiator_requests, t - cfg->scanTime * 2);
 
 #ifndef REP_DEBUG
         if (repState != REP_OK) {
@@ -1550,9 +1566,9 @@ int doHeaders(const repudiator_config_t *cfg, request_rec *r, apr_table_t *heade
             return DECLINED;
         }
 
-        const long idx = findRequest(&cfg->requests, &addr);
+        const long idx = findRequest(repudiator_requests, &addr);
         if (idx != -1) {
-            const req_node_t *req = &cfg->requests.data[idx];
+            const req_node_t *req = &repudiator_requests->data[idx];
 
             const int repState = reputationState(cfg, req->reputation);
 
@@ -1579,9 +1595,9 @@ int handleStatusCode(const repudiator_config_t *cfg, request_rec *r) {
             return DECLINED;
         }
 
-        const long idx = findRequest(&cfg->requests, &addr);
+        const long idx = findRequest(repudiator_requests, &addr);
         if (idx != -1) {
-            req_node_t *req = &cfg->requests.data[idx];
+            req_node_t *req = &repudiator_requests->data[idx];
             req->statusReputation += calcStatusReputation(&cfg->statusReputation, r->status);
         }
     }
@@ -1825,7 +1841,7 @@ static int powChallenge(request_rec *r) {
 
                     if (challenge != NULL && difficulty != NULL
                         && challenge->type == TYPE_STRING && difficulty->type == TYPE_NUMBER) {
-                        char input[SHA256_BYTES_SIZE] = {};
+                        char input[SHA256_BYTES_SIZE + sizeof(int)] = {};
                         snprintf(input, sizeof(input), "%s%d", ap_pbase64decode(r->pool, challenge->stringValue),
                                  (int) strtol(ps, NULL, 10));
 
@@ -2100,14 +2116,47 @@ static int preConfigHook(apr_pool_t *mp, apr_pool_t *mp_log, apr_pool_t *mp_temp
 }
 
 static int postConfigHook(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp, server_rec *s) {
-    const char *pk = "repudiator_init_module_tag";
+    const char *ra = "repudiator_asns";
+    const char *rn = "repudiator_networks";
+    const char *rr = "repudiator_requests";
+    const char *rc = "repudiator_counters";
     apr_pool_t *pproc = s->process->pool;
 
     if (ap_state_query(AP_SQ_MAIN_STATE) == AP_SQ_MS_CREATE_PRE_CONFIG) {
         return OK;
     }
 
-    apr_pool_userdata_get((void *) &repudiator_counters, pk, pproc);
+    apr_pool_userdata_get((void *) &repudiator_asns, ra, pproc);
+    if (!repudiator_asns) {
+        if (!(repudiator_asns = apr_pcalloc(pproc, sizeof(asn_count_vector_t)))) {
+            return APR_ENOMEM;
+        }
+
+        apr_pool_create(&repudiator_asns->pool, pproc);
+        apr_pool_userdata_set(repudiator_asns, ra, apr_pool_cleanup_null, pproc);
+    }
+
+    apr_pool_userdata_get((void *) &repudiator_networks, rn, pproc);
+    if (!repudiator_networks) {
+        if (!(repudiator_networks = apr_pcalloc(pproc, sizeof(nw_count_vector_t)))) {
+            return APR_ENOMEM;
+        }
+
+        apr_pool_create(&repudiator_networks->pool, pproc);
+        apr_pool_userdata_set(repudiator_networks, rn, apr_pool_cleanup_null, pproc);
+    }
+
+    apr_pool_userdata_get((void *) &repudiator_requests, rr, pproc);
+    if (!repudiator_requests) {
+        if (!(repudiator_requests = apr_pcalloc(pproc, sizeof(req_vector_t)))) {
+            return APR_ENOMEM;
+        }
+
+        apr_pool_create(&repudiator_requests->pool, pproc);
+        apr_pool_userdata_set(repudiator_requests, rr, apr_pool_cleanup_null, pproc);
+    }
+
+    apr_pool_userdata_get((void *) &repudiator_counters, rc, pproc);
     if (!repudiator_counters) {
         if (!(repudiator_counters = apr_pcalloc(pproc, sizeof(repudiator_counters_t))))
             return APR_ENOMEM;
@@ -2124,7 +2173,7 @@ static int postConfigHook(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp
                          statsFilename(repudiator_counters->pool));
         }
 
-        apr_pool_userdata_set(repudiator_counters, pk, apr_pool_cleanup_null, pproc);
+        apr_pool_userdata_set(repudiator_counters, rc, apr_pool_cleanup_null, pproc);
     }
     repudiator_counters->s = s;
 
@@ -2164,9 +2213,6 @@ static apr_status_t destroyConfig(void *dconfig) {
         free(cfg->asnReputation.data);
         free(cfg->statusReputation.data);
         free(cfg->countryReputation.data);
-        free(cfg->requests.data);
-        free(cfg->networks.data);
-        free(cfg->asns.data);
     }
     return APR_SUCCESS;
 }
@@ -2196,9 +2242,6 @@ static void *createDirConf(apr_pool_t *p, __attribute__((unused)) char *context)
         .scanTime = DEFAULT_SCAN_TIME,
         .warnHttpReply = DEFAULT_WARN_HTTP_REPLY,
         .blockHttpReply = DEFAULT_BLOCK_HTTP_REPLY,
-        .asns = (asn_count_vector_t){.data = NULL, .size = 0},
-        .networks = (nw_count_vector_t){.data = NULL, .size = 0},
-        .requests = (req_vector_t){.data = NULL, .size = 0},
         .stateTemplate = apr_pstrdup(p, (const char *) state_html_file),
         .powTemplate = apr_pstrdup(p, (const char *) pow_html_file),
         .powURI = apr_pstrdup(p, DEFAULT_POW_URI),
