@@ -1,3 +1,10 @@
+# [1.23.0](https://github.com/adlerre/mod_repudiator/compare/v1.22.1...v1.23.0) (2026-09-24)
+
+
+### Features
+
+* cleanup requests greater scan time ([a97c779](https://github.com/adlerre/mod_repudiator/commit/a97c7798b26c74d16e9c3a523f14b72531ca58b8))
+
 ## [1.22.1](https://github.com/adlerre/mod_repudiator/compare/v1.22.0...v1.22.1) (2026-09-23)
 
 
