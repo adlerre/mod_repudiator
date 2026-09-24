@@ -303,7 +303,7 @@ static int isInRange(const ip_node_t *range, const ip_node_t *ipNode);
 
 static int convertAddress(const char *addr, ip_node_t *ipNode);
 
-static char const *getClientIp(request_rec *r);
+static char const *getClientIp(const request_rec *r);
 
 // --------------------------------------------------------------------------------------------------------------------
 // Reputation
@@ -612,7 +612,7 @@ static apr_table_t *parseFormData(request_rec *r) {
     return tbl;
 }
 
-static char const *getClientIp(request_rec *r) {
+static char const *getClientIp(const request_rec *r) {
 #if AP_SERVER_MAJORVERSION_NUMBER == 2 && AP_SERVER_MINORVERSION_NUMBER == 4
     return r->useragent_ip;
 #else
