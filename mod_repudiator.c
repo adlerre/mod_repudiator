@@ -430,7 +430,16 @@ static void *reallocArray(void *ptr, const size_t nmemb, const size_t size) {
         return NULL;
     }
 
-    return realloc(ptr, nmemb * size);
+    void **tmp = realloc(ptr, nmemb * size);
+
+    if (!tmp) {
+        if (ptr) free(ptr);
+        tmp = malloc(nmemb * size);
+    }
+
+    ptr = tmp;
+
+    return ptr;
 }
 
 static int startsWith(const char *str, const char *prefix) {
