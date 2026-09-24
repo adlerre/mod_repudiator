@@ -1,3 +1,14 @@
+## [1.23.2](https://github.com/adlerre/mod_repudiator/compare/v1.23.1...v1.23.2) (2026-09-24)
+
+
+### Bug Fixes
+
+* code quality improvement ([16e4055](https://github.com/adlerre/mod_repudiator/commit/16e405561e4d0fa6986d207ebd004966f2b00280))
+* fix reallocArray ([51db275](https://github.com/adlerre/mod_repudiator/commit/51db275f35713225812079487445b004d9cf53d0))
+* improve code style ([71162ff](https://github.com/adlerre/mod_repudiator/commit/71162ff89fcab8a0704d11da01e41a66c3752bba))
+* more fixes to reallocArray ([9fe79ca](https://github.com/adlerre/mod_repudiator/commit/9fe79ca2bea7203f4aca126e2cd436e53234b255))
+* use apr_pstrdup instead of strdup ([3c05461](https://github.com/adlerre/mod_repudiator/commit/3c0546164735d4b26f361076c6df714746c4008a))
+
 ## [1.23.1](https://github.com/adlerre/mod_repudiator/compare/v1.23.0...v1.23.1) (2026-09-24)
 
 
