@@ -1,3 +1,10 @@
+## [1.23.1](https://github.com/adlerre/mod_repudiator/compare/v1.23.0...v1.23.1) (2026-09-24)
+
+
+### Bug Fixes
+
+* prevent double free ([520c19d](https://github.com/adlerre/mod_repudiator/commit/520c19d4a6d092f9681c0e1eab37e1df0331d090))
+
 # [1.23.0](https://github.com/adlerre/mod_repudiator/compare/v1.22.1...v1.23.0) (2026-09-24)
 
 
