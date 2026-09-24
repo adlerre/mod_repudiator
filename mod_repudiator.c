@@ -327,9 +327,9 @@ static double calcCountryReputation(const country_vector_t *countryVector, const
 
 static double calcStatusReputation(const status_vector_t *statusVector, u_int32_t status);
 
-static uint32_t lookupIPInfo(MMDB_s *mmdb, ip_node_t *node);
+static uint32_t lookupIPInfo(const MMDB_s *mmdb, ip_node_t *node);
 
-static char *lookupCountryInfo(MMDB_s *mmdb, ip_node_t *node);
+static char *lookupCountryInfo(const MMDB_s *mmdb, const ip_node_t *node);
 
 static long findRequest(const req_vector_t *requests, const ip_node_t *ip);
 
@@ -981,7 +981,7 @@ double calcStatusReputation(const status_vector_t *statusVector, const u_int32_t
     return 0.0;
 }
 
-uint32_t lookupIPInfo(MMDB_s *mmdb, ip_node_t *node) {
+uint32_t lookupIPInfo(const MMDB_s *mmdb, ip_node_t *node) {
     uint32_t asn = 0;
     int mmdb_error = 0;
     int gai_error = 0;
@@ -1035,7 +1035,7 @@ uint32_t lookupIPInfo(MMDB_s *mmdb, ip_node_t *node) {
     return asn;
 }
 
-char *lookupCountryInfo(MMDB_s *mmdb, ip_node_t *node) {
+char *lookupCountryInfo(const MMDB_s *mmdb, const ip_node_t *node) {
     char *code = NULL;
     int mmdb_error = 0;
     int gai_error = 0;
@@ -1175,8 +1175,8 @@ int removeRequest(req_vector_t *requests, const size_t idx) {
 static void cleanRequests(req_vector_t *requests, const time_t before) {
     size_t idx = 0;
     while (idx < requests->size) {
-        req_node_t *node = &requests->data[idx];
-        if (node != NULL && node->lastSeen < before) {
+        const req_node_t *node = &requests->data[idx];
+        if (node->lastSeen < before) {
             removeRequest(requests, idx);
         } else {
             idx++;
@@ -1251,7 +1251,7 @@ void cleanNetworks(nw_count_vector_t *networks, const time_t before) {
     size_t idx = 0;
     while (idx < networks->size) {
         const nw_count_t *node = &networks->data[idx];
-        if (node != NULL && node->lastSeen < before) {
+        if (node->lastSeen < before) {
             removeNetwork(networks, idx);
         } else {
             idx++;
@@ -1325,7 +1325,7 @@ void cleanASNs(asn_count_vector_t *asns, const time_t before) {
     size_t idx = 0;
     while (idx < asns->size) {
         const asn_count_t *node = &asns->data[idx];
-        if (node != NULL && node->lastSeen < before) {
+        if (node->lastSeen < before) {
             removeASN(asns, idx);
         } else {
             idx++;
@@ -1466,7 +1466,7 @@ static int accessChecker(request_rec *r) {
                 inet_ntop(AF_INET6, &req->addr.mask.v6, mask, sizeof(mask));
             }
 
-            snprintf(asnStr, sizeof(asnStr), "AS%d", asn);
+            snprintf(asnStr, sizeof(asnStr), "AS%x", asn);
             snprintf(countryStr, sizeof(countryStr), "|%s", countryCode != NULL ? countryCode : "private");
 
 #ifdef REP_DEBUG
@@ -1588,7 +1588,7 @@ int handleStatusCode(const repudiator_config_t *cfg, request_rec *r) {
 }
 
 static apr_status_t headersOutputFilter(ap_filter_t *f, apr_bucket_brigade *in) {
-    repudiator_config_t *cfg = (repudiator_config_t *) ap_get_module_config(f->r->per_dir_config, &repudiator_module);
+    const repudiator_config_t *cfg = (repudiator_config_t *) ap_get_module_config(f->r->per_dir_config, &repudiator_module);
 
     doHeaders(cfg, f->r, f->r->headers_out);
 
@@ -1600,7 +1600,7 @@ static apr_status_t headersOutputFilter(ap_filter_t *f, apr_bucket_brigade *in) 
 }
 
 static apr_status_t headersErrorFilter(ap_filter_t *f, apr_bucket_brigade *in) {
-    repudiator_config_t *cfg = (repudiator_config_t *) ap_get_module_config(f->r->per_dir_config, &repudiator_module);
+    const repudiator_config_t *cfg = (repudiator_config_t *) ap_get_module_config(f->r->per_dir_config, &repudiator_module);
 
     doHeaders(cfg, f->r, f->r->err_headers_out);
 
@@ -1685,43 +1685,43 @@ static int powValidateClientInfo(const char *ci) {
 
     JsonValue *cijson = readValue(&ci);
     if (cijson != NULL) {
-        JsonValue *webdriver = getValue(cijson, "webdriver");
+        const JsonValue *webdriver = getValue(cijson, "webdriver");
         if (webdriver != NULL &&
             webdriver->type == TYPE_BOOL && webdriver->boolValue == 1) {
             return DECLINED;
         }
 
-        JsonValue *headless = getValue(cijson, "headless");
+        const JsonValue *headless = getValue(cijson, "headless");
         if (headless != NULL &&
             headless->type == TYPE_BOOL && headless->boolValue == 1) {
             return DECLINED;
         }
 
-        JsonValue *cookieEnabled = getValue(cijson, "cookieEnabled");
+        const JsonValue *cookieEnabled = getValue(cijson, "cookieEnabled");
         if (cookieEnabled != NULL &&
             cookieEnabled->type == TYPE_BOOL && cookieEnabled->boolValue == 0) {
             return DECLINED;
         }
 
-        JsonValue *hardwareConcurrency = getValue(cijson, "hardwareConcurrency");
+        const JsonValue *hardwareConcurrency = getValue(cijson, "hardwareConcurrency");
         if (hardwareConcurrency != NULL &&
             hardwareConcurrency->type == TYPE_NUMBER && hardwareConcurrency->numberValue == 0) {
             return DECLINED;
         }
 
-        JsonValue *screenResolution = getValue(cijson, "screenResolution");
+        const JsonValue *screenResolution = getValue(cijson, "screenResolution");
         if (screenResolution != NULL &&
             screenResolution->type == TYPE_STRING && strcmp("0x0", screenResolution->stringValue) == 0) {
             return DECLINED;
         }
 
-        JsonValue *colorDepth = getValue(cijson, "colorDepth");
+        const JsonValue *colorDepth = getValue(cijson, "colorDepth");
         if (colorDepth != NULL &&
             colorDepth->type == TYPE_NUMBER && colorDepth->numberValue == 0) {
             return DECLINED;
         }
 
-        JsonValue *languages = getValue(cijson, "languages");
+        const JsonValue *languages = getValue(cijson, "languages");
         if (languages != NULL &&
             languages->type == TYPE_ARRAY && languages->arrayValue.count == 0) {
             return DECLINED;
@@ -1735,7 +1735,7 @@ static int powCookieHandler(request_rec *r) {
     int ret = DECLINED;
     const char *cookie_value = NULL;
 
-    repudiator_config_t *cfg = (repudiator_config_t *) ap_get_module_config(r->per_dir_config, &repudiator_module);
+    const repudiator_config_t *cfg = (repudiator_config_t *) ap_get_module_config(r->per_dir_config, &repudiator_module);
 
     apr_status_t status = ap_cookie_read(r, POW_PASSED_COOKIE, &cookie_value, 0);
     if (status == APR_SUCCESS && cookie_value != NULL) {
@@ -1746,8 +1746,8 @@ static int powCookieHandler(request_rec *r) {
         if (token != NULL) {
             JsonValue *tjson = readValue(&token);
             if (tjson != NULL) {
-                JsonValue *ip = getValue(tjson, "ip");
-                JsonValue *expire = getValue(tjson, "expire");
+                const JsonValue *ip = getValue(tjson, "ip");
+                const JsonValue *expire = getValue(tjson, "expire");
                 if (ip != NULL && ip->type == TYPE_STRING && expire != NULL && expire->type == TYPE_NUMBER) {
                     if (strcmp(ip->stringValue, getClientIp(r)) == 0 &&
                         (unsigned long) expire->numberValue > time(NULL)) {
@@ -1814,9 +1814,9 @@ static int powChallenge(request_rec *r) {
                 JsonValue *tjson = readValue(&token);
                 if (tjson != NULL) {
                     char location[HUGE_STRING_LEN] = {0};
-                    JsonValue *challenge = getValue(tjson, "challenge");
-                    JsonValue *difficulty = getValue(tjson, "difficulty");
-                    JsonValue *uri = getValue(tjson, "uri");
+                    const JsonValue *challenge = getValue(tjson, "challenge");
+                    const JsonValue *difficulty = getValue(tjson, "difficulty");
+                    const JsonValue *uri = getValue(tjson, "uri");
 
                     if (challenge != NULL && difficulty != NULL
                         && challenge->type == TYPE_STRING && difficulty->type == TYPE_NUMBER) {
@@ -2134,7 +2134,7 @@ static void headersInsertErrorFilter(request_rec *r) {
     ap_add_output_filter(FIXUP_HEADERS_ERR_FILTER, NULL, r, r->connection);
 }
 
-static void destroyREVector(re_vector_t *vec) {
+static void destroyREVector(const re_vector_t *vec) {
 #ifdef PCRE2
     for (size_t i = 0; i < vec->size; i++) {
         re_node_t *node = &vec->data[i];
@@ -2508,7 +2508,7 @@ static const char *setWarnHttpReply(__attribute__((unused)) cmd_parms *cmd, void
                      value, DEFAULT_WARN_HTTP_REPLY);
         cfg->warnHttpReply = DEFAULT_WARN_HTTP_REPLY;
     } else {
-        cfg->warnHttpReply = n;
+        cfg->warnHttpReply = (int) n;
     }
 
     return NULL;
@@ -2527,7 +2527,7 @@ static const char *setBlocHttpReply(__attribute__((unused)) cmd_parms *cmd, void
                      value, DEFAULT_BLOCK_HTTP_REPLY);
         cfg->blockHttpReply = DEFAULT_BLOCK_HTTP_REPLY;
     } else {
-        cfg->blockHttpReply = n;
+        cfg->blockHttpReply = (int) n;
     }
 
     return NULL;
@@ -2621,7 +2621,7 @@ static const char *setPOWDifficulty(__attribute__((unused)) cmd_parms *cmd, void
                      value, DEFAULT_POW_DIFFICULTY);
         cfg->powDifficulty = DEFAULT_POW_DIFFICULTY;
     } else {
-        cfg->powDifficulty = n;
+        cfg->powDifficulty = (int) n;
     }
 
     return NULL;
@@ -2640,7 +2640,7 @@ static const char *setPOWCookieMaxAge(__attribute__((unused)) cmd_parms *cmd, vo
                      value, DEFAULT_POW_COOKIE_MAXAGE);
         cfg->powCookieMaxAge = DEFAULT_POW_COOKIE_MAXAGE;
     } else {
-        cfg->powCookieMaxAge = n;
+        cfg->powCookieMaxAge = (int) n;
     }
 
     return NULL;
