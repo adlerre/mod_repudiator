@@ -211,6 +211,8 @@ typedef struct {
 } req_vector_t;
 
 typedef struct {
+    apr_pool_t *pool;
+
     int enabled;
     char *asnDBPath;
     char *countryDBPath;
@@ -313,7 +315,7 @@ static int parseRegexReputation(re_vector_t *reVector, const char *regex, const 
 
 static int parseASNReputation(asn_vector_t *asnVector, const char *asn, const char *rep);
 
-static int parseCountryReputation(country_vector_t *countryVector, const char *code, const char *rep);
+static int parseCountryReputation(apr_pool_t *p, country_vector_t *countryVector, const char *code, const char *rep);
 
 static int parseStatusReputation(status_vector_t *statusVector, const char *ret, const char *rep);
 
@@ -845,7 +847,7 @@ static int parseASNReputation(asn_vector_t *asnVector, const char *asn, const ch
     return rc;
 }
 
-static int parseCountryReputation(country_vector_t *countryVector, const char *code, const char *rep) {
+static int parseCountryReputation(apr_pool_t *p, country_vector_t *countryVector, const char *code, const char *rep) {
     int rc = 0;
 
     if (strlen(code) != 0 && strlen(rep) != 0) {
@@ -857,7 +859,7 @@ static int parseCountryReputation(country_vector_t *countryVector, const char *c
 
         countryVector->data = node;
         countryVector->data[countryVector->size++] = (country_node_t){
-            .code = strdup(code),
+            .code = apr_pstrdup(p, code),
             .reputation = strtod(rep, NULL)
         };
     } else {
@@ -1106,7 +1108,7 @@ req_node_t *addRequest(repudiator_config_t *cfg, const ip_node_t *ip, const uint
         cfg->requests.data = node;
         cfg->requests.data[cfg->requests.size++] = (req_node_t){
             .asn = asn,
-            .countryCode = countryCode != NULL ? strdup(countryCode) : NULL,
+            .countryCode = countryCode != NULL ? apr_pstrdup(cfg->pool, countryCode) : NULL,
             .addr = *ip,
             .count = 1,
             .lastSeen = timestamp
@@ -1150,9 +1152,7 @@ int removeRequest(req_vector_t *requests, const size_t idx) {
     if (requests == NULL || idx >= requests->size || requests->data == NULL) {
         return -1;
     }
-    if (requests->data[idx].countryCode != NULL) {
-        free(requests->data[idx].countryCode);
-    }
+
     requests->data[idx].countryCode = NULL;
     for (size_t i = idx; i + 1 < requests->size; ++i) {
         requests->data[i] = requests->data[i + 1];
@@ -1588,7 +1588,8 @@ int handleStatusCode(const repudiator_config_t *cfg, request_rec *r) {
 }
 
 static apr_status_t headersOutputFilter(ap_filter_t *f, apr_bucket_brigade *in) {
-    const repudiator_config_t *cfg = (repudiator_config_t *) ap_get_module_config(f->r->per_dir_config, &repudiator_module);
+    const repudiator_config_t *cfg = (repudiator_config_t *) ap_get_module_config(
+        f->r->per_dir_config, &repudiator_module);
 
     doHeaders(cfg, f->r, f->r->headers_out);
 
@@ -1600,7 +1601,8 @@ static apr_status_t headersOutputFilter(ap_filter_t *f, apr_bucket_brigade *in) 
 }
 
 static apr_status_t headersErrorFilter(ap_filter_t *f, apr_bucket_brigade *in) {
-    const repudiator_config_t *cfg = (repudiator_config_t *) ap_get_module_config(f->r->per_dir_config, &repudiator_module);
+    const repudiator_config_t *cfg = (repudiator_config_t *) ap_get_module_config(
+        f->r->per_dir_config, &repudiator_module);
 
     doHeaders(cfg, f->r, f->r->err_headers_out);
 
@@ -1735,7 +1737,8 @@ static int powCookieHandler(request_rec *r) {
     int ret = DECLINED;
     const char *cookie_value = NULL;
 
-    const repudiator_config_t *cfg = (repudiator_config_t *) ap_get_module_config(r->per_dir_config, &repudiator_module);
+    const repudiator_config_t *cfg = (repudiator_config_t *)
+            ap_get_module_config(r->per_dir_config, &repudiator_module);
 
     apr_status_t status = ap_cookie_read(r, POW_PASSED_COOKIE, &cookie_value, 0);
     if (status == APR_SUCCESS && cookie_value != NULL) {
@@ -1822,7 +1825,7 @@ static int powChallenge(request_rec *r) {
                         && challenge->type == TYPE_STRING && difficulty->type == TYPE_NUMBER) {
                         char input[SHA256_BYTES_SIZE] = {};
                         snprintf(input, sizeof(input), "%s%d", ap_pbase64decode(r->pool, challenge->stringValue),
-                                 atoi(ps));
+                                 (int) strtol(ps, NULL, 10));
 
                         uint8_t hex[SHA256_BYTES_SIZE];
                         sha256_bytes(input, strlen(input), hex);
@@ -2158,26 +2161,10 @@ static apr_status_t destroyConfig(void *dconfig) {
         destroyREVector(&cfg->uriReputation);
         free(cfg->asnReputation.data);
         free(cfg->statusReputation.data);
-
-        for (size_t i = 0; i < cfg->countryReputation.size; i++) {
-            free(cfg->countryReputation.data[i].code);
-        }
         free(cfg->countryReputation.data);
-
-        for (size_t i = 0; i < cfg->requests.size; ++i) {
-            free(cfg->requests.data[i].countryCode);
-        }
         free(cfg->requests.data);
         free(cfg->networks.data);
         free(cfg->asns.data);
-        free(cfg->asnDBPath);
-        free(cfg->countryDBPath);
-        free(cfg->stateTemplate);
-        free(cfg->powTemplate);
-        free(cfg->powURI);
-        if (cfg->powCookiePassphrase != NULL) {
-            free(cfg->powCookiePassphrase);
-        }
     }
     return APR_SUCCESS;
 }
@@ -2190,6 +2177,7 @@ static void *createDirConf(apr_pool_t *p, __attribute__((unused)) char *context)
     }
 
     *cfg = (repudiator_config_t){
+        .pool = p,
         .enabled = 0,
         .asnDBPath = NULL,
         .countryDBPath = NULL,
@@ -2209,9 +2197,9 @@ static void *createDirConf(apr_pool_t *p, __attribute__((unused)) char *context)
         .asns = (asn_count_vector_t){.data = NULL, .size = 0},
         .networks = (nw_count_vector_t){.data = NULL, .size = 0},
         .requests = (req_vector_t){.data = NULL, .size = 0},
-        .stateTemplate = strdup((const char *) state_html_file),
-        .powTemplate = strdup((const char *) pow_html_file),
-        .powURI = strdup(DEFAULT_POW_URI),
+        .stateTemplate = apr_pstrdup(p, (const char *) state_html_file),
+        .powTemplate = apr_pstrdup(p, (const char *) pow_html_file),
+        .powURI = apr_pstrdup(p, DEFAULT_POW_URI),
         .powCookiePassphrase = NULL,
         .powDifficulty = DEFAULT_POW_DIFFICULTY,
         .powCookieMaxAge = DEFAULT_POW_COOKIE_MAXAGE,
@@ -2248,7 +2236,7 @@ static apr_status_t cleanupDatabase(void *mmdb) {
 static const char *setASNDatabase(cmd_parms *cmd, void *dconfig, const char *value) {
     repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
 
-    cfg->asnDBPath = strdup(value);
+    cfg->asnDBPath = apr_pstrdup(cfg->pool, value);
 
     MMDB_s *mmdb = apr_pcalloc(cmd->pool, sizeof(MMDB_s));
     int mmdb_error = MMDB_open(cfg->asnDBPath, MMDB_MODE_MMAP, mmdb);
@@ -2268,7 +2256,7 @@ static const char *setASNDatabase(cmd_parms *cmd, void *dconfig, const char *val
 static const char *setCountryDatabase(cmd_parms *cmd, void *dconfig, const char *value) {
     repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
 
-    cfg->countryDBPath = strdup(value);
+    cfg->countryDBPath = apr_pstrdup(cfg->pool, value);
 
     MMDB_s *mmdb = apr_pcalloc(cmd->pool, sizeof(MMDB_s));
     int mmdb_error = MMDB_open(cfg->countryDBPath, MMDB_MODE_MMAP, mmdb);
@@ -2353,7 +2341,7 @@ static const char *setCountryReputation(__attribute__((unused)) cmd_parms *cmd, 
                                         const char *value2) {
     repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
 
-    const int rc = parseCountryReputation(&cfg->countryReputation, value, value2);
+    const int rc = parseCountryReputation(cfg->pool, &cfg->countryReputation, value, value2);
 
     if (rc == -1) {
         ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "CountryReputation: OOM");
@@ -2548,7 +2536,7 @@ static const char *setStateTemplateFile(__attribute__((unused)) cmd_parms *cmd, 
         }
         fclose(fp);
 
-        cfg->stateTemplate = strdup(source);
+        cfg->stateTemplate = apr_pstrdup(cfg->pool, source);
     } else {
         ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
                      "Couldn't open RepudiatorStateTemplateFile for value '%s'",
@@ -2562,12 +2550,12 @@ static const char *setPOWUri(__attribute__((unused)) cmd_parms *cmd, void *dconf
     repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
 
     if (value != NULL && *value != '\0' && value[0] != '/') {
-        cfg->powURI = strdup(value);
+        cfg->powURI = apr_pstrdup(cfg->pool, value);
     } else {
         ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
                      "Invalid RepudiatorPOWUri value '%s', using default %s.",
                      value, DEFAULT_POW_URI);
-        cfg->powURI = strdup(DEFAULT_POW_URI);
+        cfg->powURI = apr_pstrdup(cfg->pool, DEFAULT_POW_URI);
     }
 
     return NULL;
@@ -2588,7 +2576,7 @@ static const char *setPOWTemplateFile(__attribute__((unused)) cmd_parms *cmd, vo
         }
         fclose(fp);
 
-        cfg->powTemplate = strdup(source);
+        cfg->powTemplate = apr_pstrdup(cfg->pool, source);
     } else {
         ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
                      "Couldn't open RepudiatorPOWTemplateFile for value '%s'",
@@ -2602,7 +2590,7 @@ static const char *setPOWCookiePassphrase(__attribute__((unused)) cmd_parms *cmd
     repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
 
     if (value != NULL && *value != '\0') {
-        cfg->powCookiePassphrase = strdup(value);
+        cfg->powCookiePassphrase = apr_pstrdup(cfg->pool, value);
     }
 
     return NULL;
