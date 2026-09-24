@@ -1,3 +1,10 @@
+## [1.23.3](https://github.com/adlerre/mod_repudiator/compare/v1.23.2...v1.23.3) (2026-09-24)
+
+
+### Bug Fixes
+
+* switch to binary base64 from apr ([f67a1b9](https://github.com/adlerre/mod_repudiator/commit/f67a1b9afcf1cbcce1ec6f7e3884f3b874c8e200))
+
 ## [1.23.2](https://github.com/adlerre/mod_repudiator/compare/v1.23.1...v1.23.2) (2026-09-24)
 
 
