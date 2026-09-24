@@ -430,11 +430,17 @@ static void *reallocArray(void *ptr, const size_t nmemb, const size_t size) {
         return NULL;
     }
 
-    void **tmp = realloc(ptr, nmemb * size);
+    void *tmp;
 
-    if (!tmp) {
-        if (ptr) free(ptr);
+    if (ptr == NULL) {
         tmp = malloc(nmemb * size);
+    } else {
+        tmp = realloc(ptr, nmemb * size);
+    }
+
+    if (tmp == NULL) {
+        errno = ENOMEM;
+        return NULL;
     }
 
     ptr = tmp;
