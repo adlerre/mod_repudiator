@@ -40,6 +40,7 @@
 #include "apr_file_io.h"
 #include "apr_general.h"
 #include "apr_base64.h"
+#include "apr_escape.h"
 #include "httpd.h"
 #include "http_core.h"
 #include "http_config.h"
@@ -1356,7 +1357,8 @@ static int accessChecker(request_rec *r) {
                 ap_cookie_remove(r, POW_PASSED_COOKIE, NULL, r->headers_out, r->err_headers_out, NULL);
 
                 char location[HUGE_STRING_LEN] = {0};
-                snprintf(location, sizeof(location), "%s?%s=%s", cfg->powURI, POW_REDIRECT_URI, r->unparsed_uri);
+                snprintf(location, sizeof(location), "%s?%s=%s", cfg->powURI, POW_REDIRECT_URI,
+                         apr_pescape_urlencoded(r->pool, r->unparsed_uri));
                 apr_table_setn(r->headers_out, "Location", location);
                 return r->method_number == M_POST || r->method_number == M_PUT
                            ? HTTP_SEE_OTHER
@@ -1783,8 +1785,10 @@ static int powChallenge(request_rec *r) {
                                             cfg->powCookieMaxAge, r->headers_out, r->err_headers_out,
                                             NULL);
 
+                            const char *loc;
                             if (uri != NULL && uri->type == TYPE_STRING
-                                && startsWith(uri->stringValue, cfg->powURI) == 0) {
+                                && ((loc = apr_punescape_url(r->pool, uri->stringValue, NULL, NULL, 0)))
+                                && startsWith(loc, cfg->powURI) == 0 && startsWith(loc, "/") == 1) {
                                 snprintf(location, sizeof(location), "%s", uri->stringValue);
                             } else {
                                 snprintf(location, sizeof(location), "%s", "/");
@@ -2039,10 +2043,10 @@ static int postConfigHook(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp
 
     apr_pool_userdata_get((void *) &repudiator_counters, pk, pproc);
     if (!repudiator_counters) {
-        if (!(repudiator_counters = apr_pcalloc(pproc, sizeof(repudiator_counters_t))))
+        if (!((repudiator_counters = apr_pcalloc(pproc, sizeof(repudiator_counters_t)))))
             return APR_ENOMEM;
 
-        if (!(repudiator_counters->counter = apr_pcalloc(pproc, sizeof(counters_t))))
+        if (!((repudiator_counters->counter = apr_pcalloc(pproc, sizeof(counters_t)))))
             return APR_ENOMEM;
 
         apr_pool_create(&repudiator_counters->pool, pproc);
