@@ -1,3 +1,11 @@
+## [1.23.4](https://github.com/adlerre/mod_repudiator/compare/v1.23.3...v1.23.4) (2026-09-25)
+
+
+### Bug Fixes
+
+* fix uri encoding ([08e5bc6](https://github.com/adlerre/mod_repudiator/commit/08e5bc6c9db8869448c69b629fbbac16ffe6624f))
+* improve code quality ([fabe5b6](https://github.com/adlerre/mod_repudiator/commit/fabe5b653c7a169457702c6cddeed834a99daa94))
+
 ## [1.23.3](https://github.com/adlerre/mod_repudiator/compare/v1.23.2...v1.23.3) (2026-09-24)
 
 
