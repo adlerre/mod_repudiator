@@ -1,3 +1,10 @@
+## [1.24.1](https://github.com/adlerre/mod_repudiator/compare/v1.24.0...v1.24.1) (2026-09-25)
+
+
+### Bug Fixes
+
+* asn output ([27f0018](https://github.com/adlerre/mod_repudiator/commit/27f0018e13836d9c992b61541c6a88496f01786f))
+
 # [1.24.0](https://github.com/adlerre/mod_repudiator/compare/v1.23.4...v1.24.0) (2026-09-25)
 
 
