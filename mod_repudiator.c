@@ -1498,7 +1498,7 @@ static int accessChecker(request_rec *r) {
                 inet_ntop(AF_INET6, &req->addr.mask.v6, mask, sizeof(mask));
             }
 
-            snprintf(asnStr, sizeof(asnStr), "AS%x", asn);
+            snprintf(asnStr, sizeof(asnStr), "AS%d", (int) asn);
             snprintf(countryStr, sizeof(countryStr), "|%s", countryCode != NULL ? countryCode : "private");
 
 #ifdef REP_DEBUG
