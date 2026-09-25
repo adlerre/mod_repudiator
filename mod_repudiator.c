@@ -39,6 +39,7 @@
 #include "apr_random.h"
 #include "apr_file_io.h"
 #include "apr_general.h"
+#include "apr_anylock.h"
 #include "apr_base64.h"
 #include "apr_escape.h"
 #include "httpd.h"
@@ -50,6 +51,7 @@
 #include "http_protocol.h"
 #include "util_cookies.h"
 #include "ap_slotmem.h"
+#include "ap_mpm.h"
 
 #include "json.c"
 #include "sha256.c"
@@ -173,6 +175,7 @@ typedef struct {
 } asn_count_t;
 
 typedef struct {
+    apr_anylock_t mutex;
     asn_count_t *data;
     size_t size;
 } asn_count_vector_t;
@@ -184,6 +187,7 @@ typedef struct {
 } nw_count_t;
 
 typedef struct {
+    apr_anylock_t mutex;
     nw_count_t *data;
     size_t size;
 } nw_count_vector_t;
@@ -206,6 +210,8 @@ typedef struct {
 } req_node_t;
 
 typedef struct {
+    apr_pool_t *pool;
+    apr_anylock_t mutex;
     req_node_t *data;
     size_t size;
 } req_vector_t;
@@ -233,9 +239,6 @@ typedef struct {
 
     MMDB_s *mmdbASN;
     MMDB_s *mmdbCountry;
-    asn_count_vector_t asns;
-    nw_count_vector_t networks;
-    req_vector_t requests;
 
     char *stateTemplate;
 
@@ -247,6 +250,11 @@ typedef struct {
     double powAboveReputation;
     double powBelowReputation;
 } repudiator_config_t;
+
+static asn_count_vector_t *repudiator_asns = NULL;
+static nw_count_vector_t *repudiator_networks = NULL;
+static req_vector_t *repudiator_requests = NULL;
+
 
 // --------------------------------------------------------------------------------------------------------------------
 // Counters
@@ -268,6 +276,7 @@ typedef struct {
     apr_time_t lastUpdate;
     apr_pool_t *pool;
     server_rec *s;
+    apr_anylock_t mutex;
 } repudiator_counters_t;
 
 static repudiator_counters_t *repudiator_counters = NULL;
@@ -395,6 +404,8 @@ static apr_status_t readStats(apr_pool_t *pool, counters_t *counters);
 static apr_status_t writeStats(apr_pool_t *pool, const counters_t *counters);
 
 static apr_status_t updateStats();
+
+static void incCounter(unsigned long *counter);
 
 static void incNumRequests();
 
@@ -548,12 +559,13 @@ static char const *getClientIp(const request_rec *r) {
 }
 
 static uint32_t prefix2mask(int prefix) {
-    struct in_addr mask;
-    memset(&mask, 0, sizeof(mask));
-    if (prefix) {
-        return htonl(~((1 << (32 - prefix)) - 1));
-    }
-    return htonl(0);
+    if (prefix <= 0)
+        return htonl(0U);
+
+    if (prefix >= 32)
+        return htonl(UINT32_MAX);
+
+    return htonl(UINT32_MAX << (32 - prefix));
 }
 
 static void ipv6ApplyMask(struct in6_addr *restrict addr, const struct in6_addr *restrict mask) {
@@ -1019,6 +1031,7 @@ char *lookupCountryInfo(const MMDB_s *mmdb, const ip_node_t *node) {
 
 long findRequest(const req_vector_t *requests, const ip_node_t *ip) {
     long idx = -1;
+
     for (size_t i = 0; i < requests->size; ++i) {
         const req_node_t *node = &requests->data[i];
         if (node->addr.family == ip->family) {
@@ -1030,6 +1043,7 @@ long findRequest(const req_vector_t *requests, const ip_node_t *ip) {
             }
         }
     }
+
     return idx;
 }
 
@@ -1040,35 +1054,47 @@ req_node_t *addRequest(repudiator_config_t *cfg, const ip_node_t *ip, const uint
         return NULL;
     }
 
-    const long idx = findRequest(&cfg->requests, ip);
+    apr_status_t rv = APR_ANYLOCK_LOCK(&(repudiator_requests->mutex));
+    if (rv != APR_SUCCESS) {
+        return NULL;
+    }
+
+    const long idx = findRequest(repudiator_requests, ip);
+
     if (idx == -1) {
-        req_node_t *node = reallocArray(cfg->requests.data, cfg->requests.size + 1, sizeof(*(cfg->requests.data)));
+        req_node_t *node = reallocArray(repudiator_requests->data, repudiator_requests->size + 1,
+                                        sizeof(*(repudiator_requests->data)));
         if (node == NULL) {
+            APR_ANYLOCK_UNLOCK(&(repudiator_requests->mutex));
             return NULL;
         }
 
-        cfg->requests.data = node;
-        cfg->requests.data[cfg->requests.size++] = (req_node_t){
+        repudiator_requests->data = node;
+        repudiator_requests->data[repudiator_requests->size++] = (req_node_t){
             .asn = asn,
-            .countryCode = countryCode != NULL ? apr_pstrdup(cfg->pool, countryCode) : NULL,
+            .countryCode = countryCode != NULL ? apr_pstrdup(repudiator_requests->pool, countryCode) : NULL,
             .addr = *ip,
             .count = 1,
             .lastSeen = timestamp
         };
 
-        node = &cfg->requests.data[cfg->requests.size - 1];
+        node = &repudiator_requests->data[repudiator_requests->size - 1];
         node->ipReputation = calcIPReputation(&cfg->ipReputation, ip);
         node->uaReputation = calcRegexReputation(&cfg->uaReputation, userAgent);
         node->uriReputation = calcRegexReputation(&cfg->uriReputation, uri);
         node->asnReputation = calcASNReputation(&cfg->asnReputation, asn);
         node->countryReputation = calcCountryReputation(&cfg->countryReputation, countryCode);
+
+        APR_ANYLOCK_UNLOCK(&(repudiator_requests->mutex));
+
         return node;
     }
 
-    req_node_t *node = &cfg->requests.data[idx];
+    req_node_t *node = &repudiator_requests->data[idx];
 
     if (node->lastSeen > timestamp - cfg->scanTime) {
         if (node->count == SIZE_MAX) {
+            APR_ANYLOCK_UNLOCK(&(repudiator_requests->mutex));
             return NULL;
         }
         node->count++;
@@ -1086,6 +1112,8 @@ req_node_t *addRequest(repudiator_config_t *cfg, const ip_node_t *ip, const uint
         node->countryReputation = calcCountryReputation(&cfg->countryReputation, countryCode);
     }
     node->lastSeen = timestamp;
+
+    APR_ANYLOCK_UNLOCK(&(repudiator_requests->mutex));
 
     return node;
 }
@@ -1116,6 +1144,12 @@ int removeRequest(req_vector_t *requests, const size_t idx) {
 
 static void cleanRequests(req_vector_t *requests, const time_t before) {
     size_t idx = 0;
+
+    apr_status_t rv = APR_ANYLOCK_LOCK(&(repudiator_requests->mutex));
+    if (rv != APR_SUCCESS) {
+        return;
+    }
+
     while (idx < requests->size) {
         const req_node_t *node = &requests->data[idx];
         if (node->lastSeen < before) {
@@ -1124,6 +1158,8 @@ static void cleanRequests(req_vector_t *requests, const time_t before) {
             idx++;
         }
     }
+
+    APR_ANYLOCK_UNLOCK(&(repudiator_requests->mutex));
 }
 
 long findNetwork(const nw_count_vector_t *networks, const ip_node_t *addr) {
@@ -1164,6 +1200,11 @@ int removeNetwork(nw_count_vector_t *networks, const size_t idx) {
 
 int incNetworkCount(nw_count_vector_t *networks, const ip_node_t *addr, const time_t update,
                     const time_t scanTime) {
+    apr_status_t rv = APR_ANYLOCK_LOCK(&(networks->mutex));
+    if (rv != APR_SUCCESS) {
+        return -1;
+    }
+
     long idx = findNetwork(networks, addr);
     if (idx != -1) {
         nw_count_t *node = &networks->data[idx];
@@ -1175,6 +1216,7 @@ int incNetworkCount(nw_count_vector_t *networks, const ip_node_t *addr, const ti
     } else {
         nw_count_t *node = reallocArray(networks->data, networks->size + 1, sizeof(*(networks->data)));
         if (node == NULL) {
+            APR_ANYLOCK_UNLOCK(&(networks->mutex));
             return -1;
         }
 
@@ -1186,11 +1228,19 @@ int incNetworkCount(nw_count_vector_t *networks, const ip_node_t *addr, const ti
         };
     }
 
+    APR_ANYLOCK_UNLOCK(&(networks->mutex));
+
     return 0;
 }
 
 void cleanNetworks(nw_count_vector_t *networks, const time_t before) {
     size_t idx = 0;
+
+    apr_status_t rv = APR_ANYLOCK_LOCK(&(networks->mutex));
+    if (rv != APR_SUCCESS) {
+        return;
+    }
+
     while (idx < networks->size) {
         const nw_count_t *node = &networks->data[idx];
         if (node->lastSeen < before) {
@@ -1199,6 +1249,8 @@ void cleanNetworks(nw_count_vector_t *networks, const time_t before) {
             idx++;
         }
     }
+
+    APR_ANYLOCK_UNLOCK(&(networks->mutex));
 }
 
 long findASN(const asn_count_vector_t *asns, const u_int32_t asn) {
@@ -1238,7 +1290,13 @@ int removeASN(asn_count_vector_t *asns, const size_t idx) {
 }
 
 int incASNCount(asn_count_vector_t *asns, const u_int32_t asn, const time_t update, const time_t scanTime) {
+    apr_status_t rv = APR_ANYLOCK_LOCK(&(asns->mutex));
+    if (rv != APR_SUCCESS) {
+        return 0;
+    }
+
     const long idx = findASN(asns, asn);
+
     if (idx != -1) {
         asn_count_t *node = &asns->data[idx];
         if (node->lastSeen < update - scanTime)
@@ -1249,6 +1307,7 @@ int incASNCount(asn_count_vector_t *asns, const u_int32_t asn, const time_t upda
     } else {
         asn_count_t *node = reallocArray(asns->data, asns->size + 1, sizeof(*(asns->data)));
         if (node == NULL) {
+            APR_ANYLOCK_UNLOCK(&(asns->mutex));
             return -1;
         }
 
@@ -1260,11 +1319,19 @@ int incASNCount(asn_count_vector_t *asns, const u_int32_t asn, const time_t upda
         };
     }
 
+    APR_ANYLOCK_UNLOCK(&(asns->mutex));
+
     return 0;
 }
 
 void cleanASNs(asn_count_vector_t *asns, const time_t before) {
     size_t idx = 0;
+
+    apr_status_t rv = APR_ANYLOCK_LOCK(&(asns->mutex));
+    if (rv != APR_SUCCESS) {
+        return;
+    }
+
     while (idx < asns->size) {
         const asn_count_t *node = &asns->data[idx];
         if (node->lastSeen < before) {
@@ -1273,6 +1340,8 @@ void cleanASNs(asn_count_vector_t *asns, const time_t before) {
             idx++;
         }
     }
+
+    APR_ANYLOCK_UNLOCK(&(asns->mutex));
 }
 
 int reputationState(const repudiator_config_t *cfg, const double reputation) {
@@ -1296,18 +1365,38 @@ int reputationState(const repudiator_config_t *cfg, const double reputation) {
 }
 
 double calcReputation(const repudiator_config_t *cfg, const req_node_t *reqNode, const int type) {
+    apr_status_t rv;
     long idx;
+    double res;
+
     switch (type) {
         case 1:
             return cfg->perIPReputation * (double) reqNode->count;
         case 2:
-            idx = findNetwork(&cfg->networks, &reqNode->addr);
-            return idx != -1 ? cfg->perNetworkReputation * (double) cfg->networks.data[idx].count : 0;
+            rv = APR_ANYLOCK_LOCK(&(repudiator_networks->mutex));
+            if (rv != APR_SUCCESS) {
+                return 0.0;
+            }
+            idx = findNetwork(repudiator_networks, &reqNode->addr);
+            res = idx != -1
+                      ? cfg->perNetworkReputation * (double) repudiator_networks->data[idx].count
+                      : 0;
+
+            APR_ANYLOCK_UNLOCK(&(repudiator_networks->mutex));
+            return res;
         case 3:
-            idx = findASN(&cfg->asns, reqNode->asn);
-            return reqNode->asn != 0 && idx != -1
-                       ? cfg->perASNReputation * (double) cfg->asns.data[idx].count
-                       : 0.0;
+            rv = APR_ANYLOCK_LOCK(&(repudiator_asns->mutex));
+            if (rv != APR_SUCCESS) {
+                return 0.0;
+            }
+
+            idx = findASN(repudiator_asns, reqNode->asn);
+            res = reqNode->asn != 0 && idx != -1
+                      ? cfg->perASNReputation * (double) repudiator_asns->data[idx].count
+                      : 0.0;
+
+            APR_ANYLOCK_UNLOCK(&(repudiator_asns->mutex));
+            return res;
         default:
             return (reqNode->ipReputation + reqNode->uaReputation + reqNode->uriReputation + reqNode->asnReputation +
                     reqNode->countryReputation) / (double) reqNode->count;
@@ -1334,8 +1423,8 @@ static int accessChecker(request_rec *r) {
         const char *countryCode = lookupCountryInfo(cfg->mmdbCountry, &addr);
         const char *userAgent = apr_table_get(r->headers_in, "user-agent");
 
-        incASNCount(&cfg->asns, asn, t, cfg->scanTime);
-        incNetworkCount(&cfg->networks, &addr, t, cfg->scanTime);
+        incASNCount(repudiator_asns, asn, t, cfg->scanTime);
+        incNetworkCount(repudiator_networks, &addr, t, cfg->scanTime);
 
         req_node_t *req = addRequest(cfg, &addr, asn, countryCode, userAgent, r->unparsed_uri, t);
         if (req == NULL) {
@@ -1382,16 +1471,16 @@ static int accessChecker(request_rec *r) {
         }
 
 #ifdef REP_DEBUG
-        long idx = findNetwork(&cfg->networks, &addr);
-        const size_t nwCount = idx != -1 ? cfg->networks.data[idx].count : 0;
+        long idx = findNetwork(repudiator_networks, &addr);
+        const size_t nwCount = idx != -1 ? repudiator_networks->data[idx].count : 0;
 
-        idx = findASN(&cfg->asns, req->asn);
-        const size_t asnCount = idx != -1 ? cfg->asns.data[idx].count : 0;
+        idx = findASN(repudiator_asns, req->asn);
+        const size_t asnCount = idx != -1 ? repudiator_asns->data[idx].count : 0;
 #endif
 
-        cleanASNs(&cfg->asns, t - cfg->scanTime * 2);
-        cleanNetworks(&cfg->networks, t - cfg->scanTime * 2);
-        cleanRequests(&cfg->requests, t - cfg->scanTime * 2);
+        cleanASNs(repudiator_asns, t - cfg->scanTime * 2);
+        cleanNetworks(repudiator_networks, t - cfg->scanTime * 2);
+        cleanRequests(repudiator_requests, t - cfg->scanTime * 2);
 
 #ifndef REP_DEBUG
         if (repState != REP_OK) {
@@ -1491,9 +1580,14 @@ int doHeaders(const repudiator_config_t *cfg, request_rec *r, apr_table_t *heade
             return DECLINED;
         }
 
-        const long idx = findRequest(&cfg->requests, &addr);
+        apr_status_t rv = APR_ANYLOCK_LOCK(&(repudiator_requests->mutex));
+        if (rv != APR_SUCCESS) {
+            return DECLINED;
+        }
+
+        const long idx = findRequest(repudiator_requests, &addr);
         if (idx != -1) {
-            const req_node_t *req = &cfg->requests.data[idx];
+            const req_node_t *req = &repudiator_requests->data[idx];
 
             const int repState = reputationState(cfg, req->reputation);
 
@@ -1507,6 +1601,8 @@ int doHeaders(const repudiator_config_t *cfg, request_rec *r, apr_table_t *heade
 
             apr_table_add(headers, X_HEADER_REPUTATION, apr_pstrdup(r->pool, repStr));
         }
+
+        APR_ANYLOCK_UNLOCK(&(repudiator_requests->mutex));
     }
 
     return OK;
@@ -1520,11 +1616,18 @@ int handleStatusCode(const repudiator_config_t *cfg, request_rec *r) {
             return DECLINED;
         }
 
-        const long idx = findRequest(&cfg->requests, &addr);
+        apr_status_t rv = APR_ANYLOCK_LOCK(&(repudiator_requests->mutex));
+        if (rv != APR_SUCCESS) {
+            return DECLINED;
+        }
+
+        const long idx = findRequest(repudiator_requests, &addr);
         if (idx != -1) {
-            req_node_t *req = &cfg->requests.data[idx];
+            req_node_t *req = &repudiator_requests->data[idx];
             req->statusReputation += calcStatusReputation(&cfg->statusReputation, r->status);
         }
+
+        APR_ANYLOCK_UNLOCK(&(repudiator_requests->mutex));
     }
 
     return OK;
@@ -1663,13 +1766,15 @@ static int powCookieHandler(request_rec *r) {
 
     apr_status_t status = ap_cookie_read(r, POW_PASSED_COOKIE, &cookie_value, 0);
     if (status == APR_SUCCESS && cookie_value != NULL) {
-        char *token = apr_palloc(r->pool, strlen(cookie_value));
+        char *token = apr_palloc(r->pool, strlen(cookie_value) + 1);
         const int len = apr_base64_decode_binary((unsigned char *) token, cookie_value);
 
         if (len != 0 && token != NULL) {
             if (cfg->powCookiePassphrase) {
                 xorCrypt(token, len, cfg->powCookiePassphrase, strlen(cfg->powCookiePassphrase));
             }
+
+            token[len] = '\0';
 
             JsonValue *tjson = readValue((const char **) &token);
             if (tjson != NULL) {
@@ -1750,9 +1855,10 @@ static int powChallenge(request_rec *r) {
 
                     if (challenge != NULL && difficulty != NULL
                         && challenge->type == TYPE_STRING && difficulty->type == TYPE_NUMBER) {
-                        char input[SHA256_BYTES_SIZE * 2] = {};
-                        snprintf(input, sizeof(input), "%s%d", ap_pbase64decode(r->pool, challenge->stringValue),
-                                 (int) strtol(ps, NULL, 10));
+                        const char *decodedChallenge = ap_pbase64decode(r->pool, challenge->stringValue);
+                        const size_t ilen = strlen(decodedChallenge) + strlen(ps) + 1;
+                        char *input = apr_palloc(r->pool, ilen);
+                        snprintf(input, ilen, "%s%d", decodedChallenge, (int) strtol(ps, NULL, 10));
 
                         uint8_t hex[SHA256_BYTES_SIZE];
                         sha256_bytes(input, strlen(input), hex);
@@ -1840,7 +1946,7 @@ static apr_status_t readStats(apr_pool_t *pool, counters_t *counters) {
     apr_file_t *f;
     apr_status_t rv = APR_SUCCESS;
 
-    if (repudiator_counters != NULL && repudiator_counters->enabled == APR_SUCCESS) {
+    if (repudiator_counters->enabled == APR_SUCCESS) {
         const apr_int32_t flags = APR_FOPEN_CREATE | APR_FOPEN_READ | APR_FOPEN_BINARY | APR_FOPEN_XTHREAD;
         if ((rv = apr_file_open(&f, statsFilename(pool), flags, APR_FPROT_OS_DEFAULT, pool)) != APR_SUCCESS) {
             return rv;
@@ -1867,7 +1973,7 @@ static apr_status_t writeStats(apr_pool_t *pool, const counters_t *counters) {
     apr_file_t *f;
     apr_status_t rv = APR_SUCCESS;
 
-    if (repudiator_counters != NULL && repudiator_counters->enabled == APR_SUCCESS) {
+    if (repudiator_counters->enabled == APR_SUCCESS) {
         const apr_int32_t flags = APR_FOPEN_CREATE | APR_FOPEN_WRITE | APR_FOPEN_BINARY | APR_FOPEN_XTHREAD;
         if ((rv = apr_file_open(&f, statsFilename(pool), flags, APR_FPROT_OS_DEFAULT, pool)) != APR_SUCCESS) {
             return rv;
@@ -1893,7 +1999,7 @@ static apr_status_t writeStats(apr_pool_t *pool, const counters_t *counters) {
 static apr_status_t updateStats() {
     apr_status_t rv = APR_SUCCESS;
 
-    if (repudiator_counters != NULL && repudiator_counters->enabled == APR_SUCCESS
+    if (repudiator_counters->enabled == APR_SUCCESS
         && (repudiator_counters->lastUpdate == 0 || apr_time_now() - repudiator_counters->lastUpdate > 1000 * 1000)) {
         apr_pool_t *pool;
         apr_pool_create(&pool, repudiator_counters->pool);
@@ -1917,6 +2023,11 @@ static apr_status_t updateStats() {
             return rv;
         }
 
+        rv = APR_ANYLOCK_LOCK(&(repudiator_counters->mutex));
+        if (rv != APR_SUCCESS) {
+            return rv;
+        }
+
         counters->requests += repudiator_counters->counter->requests;
         counters->blocked += repudiator_counters->counter->blocked;
         counters->warned += repudiator_counters->counter->warned;
@@ -1924,6 +2035,8 @@ static apr_status_t updateStats() {
         counters->powCIFailed += repudiator_counters->counter->powCIFailed;
         counters->powCompleted += repudiator_counters->counter->powCompleted;
         counters->updated = time(NULL);
+
+        APR_ANYLOCK_UNLOCK(&(repudiator_counters->mutex));
 
         if ((rv = writeStats(pool, counters)) == APR_SUCCESS) {
             *repudiator_counters->counter = (counters_t){
@@ -1944,40 +2057,41 @@ static apr_status_t updateStats() {
     return rv;
 }
 
-static void incNumRequests() {
-    if (repudiator_counters != NULL) {
-        repudiator_counters->counter->requests++;
+static void incCounter(unsigned long *counter) {
+    if (repudiator_counters->enabled == APR_SUCCESS) {
+        apr_status_t rv = APR_ANYLOCK_LOCK(&(repudiator_counters->mutex));
+        if (rv != APR_SUCCESS) {
+            return;
+        }
+
+        *counter += 1;
+
+        APR_ANYLOCK_UNLOCK(&(repudiator_counters->mutex));
     }
+}
+
+static void incNumRequests() {
+    incCounter(&repudiator_counters->counter->requests);
 }
 
 static void incNumBlocked() {
-    if (repudiator_counters != NULL) {
-        repudiator_counters->counter->blocked++;
-    }
+    incCounter(&repudiator_counters->counter->blocked);
 }
 
 static void incNumWarned() {
-    if (repudiator_counters != NULL) {
-        repudiator_counters->counter->warned++;
-    }
+    incCounter(&repudiator_counters->counter->warned);
 }
 
 static void incNumPOWRequests() {
-    if (repudiator_counters != NULL) {
-        repudiator_counters->counter->powRequests++;
-    }
+    incCounter(&repudiator_counters->counter->powRequests);
 }
 
 static void incNumPOWCIFailed() {
-    if (repudiator_counters != NULL) {
-        repudiator_counters->counter->powCIFailed++;
-    }
+    incCounter(&repudiator_counters->counter->powCIFailed);
 }
 
 static void incNumPOWCompleted() {
-    if (repudiator_counters != NULL) {
-        repudiator_counters->counter->powCompleted++;
-    }
+    incCounter(&repudiator_counters->counter->powCompleted);
 }
 
 static int counterStats(request_rec *r) {
@@ -2034,14 +2148,48 @@ static int preConfigHook(apr_pool_t *mp, apr_pool_t *mp_log, apr_pool_t *mp_temp
 }
 
 static int postConfigHook(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp, server_rec *s) {
-    const char *pk = "repudiator_init_module_tag";
-    apr_pool_t *pproc = s->process->pool;
+    int mpm_threads;
 
     if (ap_state_query(AP_SQ_MAIN_STATE) == AP_SQ_MS_CREATE_PRE_CONFIG) {
         return OK;
     }
 
-    apr_pool_userdata_get((void *) &repudiator_counters, pk, pproc);
+    ap_mpm_query(AP_MPMQ_MAX_THREADS, &mpm_threads);
+
+    const char *ra = "repudiator_asns";
+    const char *rn = "repudiator_networks";
+    const char *rr = "quests";
+    const char *rc = "repudiator_counters";
+
+    apr_pool_t *pproc = s->process->pool;
+
+    apr_pool_userdata_get((void *) &repudiator_asns, ra, pproc);
+    if (!repudiator_asns) {
+        if (!((repudiator_asns = apr_pcalloc(pproc, sizeof(asn_count_vector_t)))))
+            return APR_ENOMEM;
+
+        apr_pool_userdata_set(repudiator_asns, ra, apr_pool_cleanup_null, pproc);
+    }
+
+    apr_pool_userdata_get((void *) &repudiator_networks, rn, pproc);
+    if (!repudiator_networks) {
+        if (!((repudiator_networks = apr_pcalloc(pproc, sizeof(nw_count_vector_t)))))
+            return APR_ENOMEM;
+
+        apr_pool_userdata_set(repudiator_networks, rn, apr_pool_cleanup_null, pproc);
+    }
+
+    apr_pool_userdata_get((void *) &repudiator_requests, rr, pproc);
+    if (!repudiator_requests) {
+        if (!((repudiator_requests = apr_pcalloc(pproc, sizeof(req_vector_t)))))
+            return APR_ENOMEM;
+
+        apr_pool_create(&repudiator_requests->pool, pproc);
+
+        apr_pool_userdata_set(repudiator_requests, rr, apr_pool_cleanup_null, pproc);
+    }
+
+    apr_pool_userdata_get((void *) &repudiator_counters, rc, pproc);
     if (!repudiator_counters) {
         if (!((repudiator_counters = apr_pcalloc(pproc, sizeof(repudiator_counters_t)))))
             return APR_ENOMEM;
@@ -2058,9 +2206,49 @@ static int postConfigHook(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp
                          statsFilename(repudiator_counters->pool));
         }
 
-        apr_pool_userdata_set(repudiator_counters, pk, apr_pool_cleanup_null, pproc);
+        apr_pool_userdata_set(repudiator_counters, rc, apr_pool_cleanup_null, pproc);
     }
     repudiator_counters->s = s;
+
+#if APR_HAS_THREADS
+    if (mpm_threads > 1) {
+        apr_status_t rv;
+
+        repudiator_asns->mutex.type = apr_anylock_threadmutex;
+        rv = apr_thread_mutex_create(&repudiator_asns->mutex.lock.tm,APR_THREAD_MUTEX_DEFAULT, pproc);
+        if (rv != APR_SUCCESS) {
+            ap_log_error(APLOG_MARK, APLOG_CRIT, rv, s, APLOGNO(00647) "could not initialize ASNs mutex");
+            repudiator_asns->mutex.type = apr_anylock_none;
+        }
+
+        repudiator_networks->mutex.type = apr_anylock_threadmutex;
+        rv = apr_thread_mutex_create(&repudiator_networks->mutex.lock.tm,APR_THREAD_MUTEX_DEFAULT, pproc);
+        if (rv != APR_SUCCESS) {
+            ap_log_error(APLOG_MARK, APLOG_CRIT, rv, s, APLOGNO(00647) "could not initialize networks mutex");
+            repudiator_networks->mutex.type = apr_anylock_none;
+        }
+
+        repudiator_requests->mutex.type = apr_anylock_threadmutex;
+        rv = apr_thread_mutex_create(&repudiator_requests->mutex.lock.tm,APR_THREAD_MUTEX_DEFAULT, pproc);
+        if (rv != APR_SUCCESS) {
+            ap_log_error(APLOG_MARK, APLOG_CRIT, rv, s, APLOGNO(00647) "could not initialize requests mutex");
+            repudiator_requests->mutex.type = apr_anylock_none;
+        }
+
+        repudiator_counters->mutex.type = apr_anylock_threadmutex;
+        rv = apr_thread_mutex_create(&repudiator_counters->mutex.lock.tm,APR_THREAD_MUTEX_DEFAULT, pproc);
+        if (rv != APR_SUCCESS) {
+            ap_log_error(APLOG_MARK, APLOG_CRIT, rv, s, APLOGNO(00647) "could not initialize counter mutex");
+            repudiator_counters->mutex.type = apr_anylock_none;
+        }
+    } else
+#endif
+    {
+        repudiator_asns->mutex.type = apr_anylock_none;
+        repudiator_networks->mutex.type = apr_anylock_none;
+        repudiator_requests->mutex.type = apr_anylock_none;
+        repudiator_counters->mutex.type = apr_anylock_none;
+    }
 
     return OK;
 }
@@ -2098,9 +2286,6 @@ static apr_status_t destroyConfig(void *dconfig) {
         free(cfg->asnReputation.data);
         free(cfg->statusReputation.data);
         free(cfg->countryReputation.data);
-        free(cfg->requests.data);
-        free(cfg->networks.data);
-        free(cfg->asns.data);
     }
     return APR_SUCCESS;
 }
@@ -2130,9 +2315,6 @@ static void *createDirConf(apr_pool_t *p, __attribute__((unused)) char *context)
         .scanTime = DEFAULT_SCAN_TIME,
         .warnHttpReply = DEFAULT_WARN_HTTP_REPLY,
         .blockHttpReply = DEFAULT_BLOCK_HTTP_REPLY,
-        .asns = (asn_count_vector_t){.data = NULL, .size = 0},
-        .networks = (nw_count_vector_t){.data = NULL, .size = 0},
-        .requests = (req_vector_t){.data = NULL, .size = 0},
         .stateTemplate = apr_pstrdup(p, (const char *) state_html_file),
         .powTemplate = apr_pstrdup(p, (const char *) pow_html_file),
         .powURI = apr_pstrdup(p, DEFAULT_POW_URI),
