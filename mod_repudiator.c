@@ -1750,7 +1750,7 @@ static int powChallenge(request_rec *r) {
 
                     if (challenge != NULL && difficulty != NULL
                         && challenge->type == TYPE_STRING && difficulty->type == TYPE_NUMBER) {
-                        char input[SHA256_BYTES_SIZE] = {};
+                        char input[SHA256_BYTES_SIZE * 2] = {};
                         snprintf(input, sizeof(input), "%s%d", ap_pbase64decode(r->pool, challenge->stringValue),
                                  (int) strtol(ps, NULL, 10));
 
