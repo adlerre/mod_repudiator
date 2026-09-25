@@ -1,3 +1,15 @@
+# [1.24.0](https://github.com/adlerre/mod_repudiator/compare/v1.23.4...v1.24.0) (2026-09-25)
+
+
+### Bug Fixes
+
+* possible buffer overflow ([7ee07f1](https://github.com/adlerre/mod_repudiator/commit/7ee07f184617e1ac9833c3bbbcd4a8fec30ea63f))
+
+
+### Features
+
+* improve thread safety ([#18](https://github.com/adlerre/mod_repudiator/issues/18)) ([ad7cfbb](https://github.com/adlerre/mod_repudiator/commit/ad7cfbbbbbca118c94d449f5be978a53c723c2cd))
+
 ## [1.23.4](https://github.com/adlerre/mod_repudiator/compare/v1.23.3...v1.23.4) (2026-09-25)
 
 
