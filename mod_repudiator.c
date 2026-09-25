@@ -285,7 +285,7 @@ static void *reallocArray(void *ptr, size_t nmemb, size_t size);
 static int startsWith(const char *str, const char *prefix);
 
 // https://stackoverflow.com/questions/779875/what-function-is-to-replace-a-substring-from-a-string-in-c
-static char *strReplace(char *orig, char *rep, char *with);
+static char *strReplace(char *orig, const char *rep, const char *with);
 
 static uint32_t prefix2mask(int prefix);
 
@@ -443,7 +443,7 @@ static int startsWith(const char *str, const char *prefix) {
     return *prefix == 0;
 }
 
-static char *strReplace(char *orig, char *rep, char *with) {
+static char *strReplace(char *orig, const char *rep, const char *with) {
     char *result; // the return string
     char *ins; // the next insert point
     char *tmp; // varies
