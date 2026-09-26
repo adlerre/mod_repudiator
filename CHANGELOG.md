@@ -1,3 +1,10 @@
+## [1.24.2](https://github.com/adlerre/mod_repudiator/compare/v1.24.1...v1.24.2) (2026-09-26)
+
+
+### Bug Fixes
+
+* improve code quality ([fe059df](https://github.com/adlerre/mod_repudiator/commit/fe059df47ca3b5ebde9f6bb2478fea38dfa2059e))
+
 ## [1.24.1](https://github.com/adlerre/mod_repudiator/compare/v1.24.0...v1.24.1) (2026-09-25)
 
 
