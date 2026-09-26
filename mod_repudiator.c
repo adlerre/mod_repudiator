@@ -381,7 +381,7 @@ static apr_status_t headersErrorFilter(ap_filter_t *f, apr_bucket_brigade *in);
 
 static int countLeadingZeroBits(const uint8_t *hash, size_t nbytes);
 
-static void xorCrypt(char *data, size_t length, const char *key, size_t key_length);
+static void xorCrypt(unsigned char *data, size_t length, const unsigned char *key, size_t key_length);
 
 static void powGenerateRandomChallenge(char *challenge, size_t bytes);
 
@@ -526,22 +526,20 @@ static void qsToTable(const char *input, apr_table_t *parms, apr_pool_t *p) {
 }
 
 static apr_table_t *parseFormData(request_rec *r) {
-    apr_table_t *tbl;
     apr_array_header_t *pairs = NULL;
     apr_off_t len;
     apr_size_t size;
-    char *buffer;
 
-    int res = ap_parse_form_data(r, NULL, &pairs, -1, HUGE_STRING_LEN);
+    const int res = ap_parse_form_data(r, NULL, &pairs, -1, HUGE_STRING_LEN);
     if (res != OK || !pairs) return NULL;
 
-    tbl = apr_table_make(r->pool, pairs->nelts + 1);
+    apr_table_t *tbl = apr_table_make(r->pool, pairs->nelts + 1);
 
     while (pairs && !apr_is_empty_array(pairs)) {
         ap_form_pair_t *pair = (ap_form_pair_t *) apr_array_pop(pairs);
         apr_brigade_length(pair->value, 1, &len);
         size = (apr_size_t) len;
-        buffer = apr_palloc(r->pool, size + 1);
+        char *buffer = apr_palloc(r->pool, size + 1);
         apr_brigade_flatten(pair->value, buffer, &size);
         buffer[len] = 0;
         apr_table_set(tbl, apr_pstrdup(r->pool, pair->name), buffer);
@@ -855,10 +853,9 @@ double calcIPReputation(const ip_vector_t *ipReputation, const ip_node_t *ipNode
     for (size_t i = 0; i < ipReputation->size; ++i) {
         const ip_node_t *node = &ipReputation->data[i];
         if (node->family == ipNode->family) {
-            if (node->family == AF_INET && (node->ip.v4.s_addr == ipNode->ip.v4.s_addr || isInRange(node, ipNode))) {
-                rc += node->reputation;
-            } else if (node->family == AF_INET6 &&
-                       (memcmp(&node->ip.v6, &ipNode->ip.v6, sizeof(node->ip.v6)) == 0 || isInRange(node, ipNode))) {
+            if ((node->family == AF_INET && (node->ip.v4.s_addr == ipNode->ip.v4.s_addr || isInRange(node, ipNode))) ||
+                (node->family == AF_INET6 && (memcmp(&node->ip.v6, &ipNode->ip.v6, sizeof(node->ip.v6)) == 0 ||
+                                              isInRange(node, ipNode)))) {
                 rc += node->reputation;
             }
         }
@@ -1682,7 +1679,7 @@ int countLeadingZeroBits(const uint8_t *hash, size_t nbytes) {
     return zeroBits;
 }
 
-static void xorCrypt(char *data, const size_t length, const char *key, const size_t key_length) {
+static void xorCrypt(unsigned char *data, const size_t length, const unsigned char *key, const size_t key_length) {
     size_t i;
 
     if (data == NULL || key == NULL || key_length == 0) {
@@ -1771,7 +1768,8 @@ static int powCookieHandler(request_rec *r) {
 
         if (len != 0 && token != NULL) {
             if (cfg->powCookiePassphrase) {
-                xorCrypt(token, len, cfg->powCookiePassphrase, strlen(cfg->powCookiePassphrase));
+                xorCrypt((unsigned char *) token, len, (unsigned char *) cfg->powCookiePassphrase,
+                         strlen(cfg->powCookiePassphrase));
             }
 
             token[len] = '\0';
@@ -1879,7 +1877,7 @@ static int powChallenge(request_rec *r) {
                             char cEncoded[HUGE_STRING_LEN] = {'\0'};
 
                             if (cfg->powCookiePassphrase != NULL) {
-                                xorCrypt(cookie_val, len, cfg->powCookiePassphrase,
+                                xorCrypt((unsigned char *) cookie_val, len, (unsigned char *) cfg->powCookiePassphrase,
                                          strlen(cfg->powCookiePassphrase));
                             }
 
@@ -2095,7 +2093,7 @@ static void incNumPOWCompleted() {
 }
 
 static int counterStats(request_rec *r) {
-    if (strcmp(r->handler, REP_STATS_MAGIC_TYPE) && strcmp(r->handler, REP_STATS)) {
+    if (strcmp(r->handler, REP_STATS_MAGIC_TYPE) != 0 && strcmp(r->handler, REP_STATS) != 0) {
         return DECLINED;
     }
 
