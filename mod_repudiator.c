@@ -103,6 +103,25 @@ module AP_MODULE_DECLARE_DATA repudiator_module;
 
 #define MAX_BUF_LEN 1000000
 
+// Bit flags: which scalars were explicitly configured in this context (including the default value)?
+enum {
+    REP_SET_WARN_REPUTATION = 1u << 0,
+    REP_SET_BLOCK_REPUTATION = 1u << 1,
+    REP_SET_PER_IP_REPUTATION = 1u << 2,
+    REP_SET_PER_NET_REPUTATION = 1u << 3,
+    REP_SET_PER_ASN_REPUTATION = 1u << 4,
+    REP_SET_SCAN_TIME = 1u << 5,
+    REP_SET_WARN_HTTP_REPLY = 1u << 6,
+    REP_SET_BLOCK_HTTP_REPLY = 1u << 7,
+    REP_SET_STATE_TEMPLATE = 1u << 8,
+    REP_SET_POW_TEMPLATE = 1u << 9,
+    REP_SET_POW_URI = 1u << 10,
+    REP_SET_POW_DIFFICULTY = 1u << 11,
+    REP_SET_POW_COOKIE_MAXAGE = 1u << 12,
+    REP_SET_POW_ABOVE_REPUTATION = 1u << 13,
+    REP_SET_POW_BELOW_REPUTATION = 1u << 14,
+};
+
 typedef struct {
     union {
         struct in_addr v4;
@@ -220,6 +239,7 @@ typedef struct {
     apr_pool_t *pool;
 
     int enabled;
+    unsigned int set;
     char *asnDBPath;
     char *countryDBPath;
     ip_vector_t ipReputation;
@@ -1401,11 +1421,12 @@ double calcReputation(const repudiator_config_t *cfg, const req_node_t *reqNode,
 }
 
 static int accessChecker(request_rec *r) {
-    repudiator_config_t *cfg = (repudiator_config_t *) ap_get_module_config(r->per_dir_config, &repudiator_module);
+    repudiator_config_t *cfg = (repudiator_config_t *) ap_get_module_config(
+        r->server->module_config, &repudiator_module);
 
     int ret = OK;
 
-    if (cfg->enabled && r->prev == NULL && r->main == NULL) {
+    if (cfg->enabled > 0 && r->prev == NULL && r->main == NULL) {
         incNumRequests();
 
         apr_time_t t = r->request_time / 1000 / 1000;
@@ -1522,7 +1543,7 @@ static int accessChecker(request_rec *r) {
             }
 
 #ifdef REP_DEBUG
-            if (repState != REP_OK) { 
+            if (repState != REP_OK) {
 #endif
 
             if (cfg->stateTemplate != NULL && !r->header_only) {
@@ -1570,7 +1591,7 @@ static int accessChecker(request_rec *r) {
 }
 
 int doHeaders(const repudiator_config_t *cfg, request_rec *r, apr_table_t *headers) {
-    if (cfg->enabled) {
+    if (cfg->enabled > 0) {
         ip_node_t addr;
         if (convertAddress(getClientIp(r), &addr) == -1) {
             ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "Couldn't parse ip address");
@@ -1606,7 +1627,7 @@ int doHeaders(const repudiator_config_t *cfg, request_rec *r, apr_table_t *heade
 }
 
 int handleStatusCode(const repudiator_config_t *cfg, request_rec *r) {
-    if (cfg->enabled) {
+    if (cfg->enabled > 0) {
         ip_node_t addr;
         if (convertAddress(getClientIp(r), &addr) == -1) {
             ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "Couldn't parse ip address");
@@ -1632,7 +1653,7 @@ int handleStatusCode(const repudiator_config_t *cfg, request_rec *r) {
 
 static apr_status_t headersOutputFilter(ap_filter_t *f, apr_bucket_brigade *in) {
     const repudiator_config_t *cfg = (repudiator_config_t *) ap_get_module_config(
-        f->r->per_dir_config, &repudiator_module);
+        f->r->server->module_config, &repudiator_module);
 
     doHeaders(cfg, f->r, f->r->headers_out);
 
@@ -1645,7 +1666,7 @@ static apr_status_t headersOutputFilter(ap_filter_t *f, apr_bucket_brigade *in) 
 
 static apr_status_t headersErrorFilter(ap_filter_t *f, apr_bucket_brigade *in) {
     const repudiator_config_t *cfg = (repudiator_config_t *) ap_get_module_config(
-        f->r->per_dir_config, &repudiator_module);
+        f->r->server->module_config, &repudiator_module);
 
     doHeaders(cfg, f->r, f->r->err_headers_out);
 
@@ -1759,7 +1780,7 @@ static int powCookieHandler(request_rec *r) {
     const char *cookie_value = NULL;
 
     const repudiator_config_t *cfg = (repudiator_config_t *)
-            ap_get_module_config(r->per_dir_config, &repudiator_module);
+            ap_get_module_config(r->server->module_config, &repudiator_module);
 
     apr_status_t status = ap_cookie_read(r, POW_PASSED_COOKIE, &cookie_value, 0);
     if (status == APR_SUCCESS && cookie_value != NULL) {
@@ -1792,7 +1813,8 @@ static int powCookieHandler(request_rec *r) {
 }
 
 static int powChallenge(request_rec *r) {
-    repudiator_config_t *cfg = (repudiator_config_t *) ap_get_module_config(r->per_dir_config, &repudiator_module);
+    repudiator_config_t *cfg = (repudiator_config_t *) ap_get_module_config(
+        r->server->module_config, &repudiator_module);
 
     if (!r->uri || startsWith(r->uri, cfg->powURI) == 0) return (DECLINED);
 
@@ -2288,7 +2310,101 @@ static apr_status_t destroyConfig(void *dconfig) {
     return APR_SUCCESS;
 }
 
-static void *createDirConf(apr_pool_t *p, __attribute__((unused)) char *context) {
+static void *concatNodes(apr_pool_t *p, const void *a, const size_t na, const void *b, const size_t nb,
+                         const size_t elem, size_t *outSize) {
+    *outSize = na + nb;
+    if (*outSize == 0) {
+        return NULL;
+    }
+
+    char *out = apr_palloc(p, *outSize * elem);
+    if (na > 0) {
+        memcpy(out, a, na * elem);
+    }
+    if (nb > 0) {
+        memcpy(out + na * elem, b, nb * elem);
+    }
+    return out;
+}
+
+static void mergeIPVector(apr_pool_t *p, ip_vector_t *dst, const ip_vector_t *base, const ip_vector_t *ovr) {
+    dst->data = concatNodes(p, base->data, base->size, ovr->data, ovr->size, sizeof(*dst->data), &dst->size);
+}
+
+static void mergeREVector(apr_pool_t *p, re_vector_t *dst, const re_vector_t *base, const re_vector_t *ovr) {
+    dst->data = concatNodes(p, base->data, base->size, ovr->data, ovr->size, sizeof(*dst->data), &dst->size);
+}
+
+static void mergeASNVector(apr_pool_t *p, asn_vector_t *dst, const asn_vector_t *base, const asn_vector_t *ovr) {
+    dst->data = NULL;
+    dst->size = 0;
+    if (base->size + ovr->size == 0) {
+        return;
+    }
+
+    dst->data = apr_palloc(p, (base->size + ovr->size) * sizeof(*dst->data));
+    for (size_t i = 0; i < ovr->size; ++i) {
+        dst->data[dst->size++] = ovr->data[i];
+    }
+    for (size_t i = 0; i < base->size; ++i) {
+        int shadowed = 0;
+        for (size_t j = 0; j < ovr->size && !shadowed; ++j) {
+            shadowed = (ovr->data[j].asn == base->data[i].asn);
+        }
+        if (!shadowed) {
+            dst->data[dst->size++] = base->data[i];
+        }
+    }
+}
+
+static void mergeCountryVector(apr_pool_t *p, country_vector_t *dst, const country_vector_t *base,
+                               const country_vector_t *ovr) {
+    dst->data = NULL;
+    dst->size = 0;
+    if (base->size + ovr->size == 0) {
+        return;
+    }
+
+    dst->data = apr_palloc(p, (base->size + ovr->size) * sizeof(*dst->data));
+    for (size_t i = 0; i < ovr->size; ++i) {
+        dst->data[dst->size++] = ovr->data[i];
+    }
+    for (size_t i = 0; i < base->size; ++i) {
+        int shadowed = 0;
+        for (size_t j = 0; j < ovr->size && !shadowed; ++j) {
+            shadowed = (ovr->data[j].code != NULL && base->data[i].code != NULL &&
+                        strcasecmp(ovr->data[j].code, base->data[i].code) == 0);
+        }
+        if (!shadowed) {
+            dst->data[dst->size++] = base->data[i];
+        }
+    }
+}
+
+static void mergeStatusVector(apr_pool_t *p, status_vector_t *dst, const status_vector_t *base,
+                              const status_vector_t *ovr) {
+    dst->data = NULL;
+    dst->size = 0;
+    if (base->size + ovr->size == 0) {
+        return;
+    }
+
+    dst->data = apr_palloc(p, (base->size + ovr->size) * sizeof(*dst->data));
+    for (size_t i = 0; i < ovr->size; ++i) {
+        dst->data[dst->size++] = ovr->data[i];
+    }
+    for (size_t i = 0; i < base->size; ++i) {
+        int shadowed = 0;
+        for (size_t j = 0; j < ovr->size && !shadowed; ++j) {
+            shadowed = (ovr->data[j].status == base->data[i].status);
+        }
+        if (!shadowed) {
+            dst->data[dst->size++] = base->data[i];
+        }
+    }
+}
+
+static void *createSrvConf(apr_pool_t *p, __attribute__((unused)) server_rec *s) {
     repudiator_config_t *cfg = apr_palloc(p, sizeof(repudiator_config_t));
     if (!cfg) {
         ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "Failed to allocate configuration");
@@ -2297,7 +2413,7 @@ static void *createDirConf(apr_pool_t *p, __attribute__((unused)) char *context)
 
     *cfg = (repudiator_config_t){
         .pool = p,
-        .enabled = 0,
+        .enabled = -1,
         .asnDBPath = NULL,
         .countryDBPath = NULL,
         .ipReputation = (ip_vector_t){.data = NULL, .size = 0},
@@ -2328,8 +2444,68 @@ static void *createDirConf(apr_pool_t *p, __attribute__((unused)) char *context)
     return cfg;
 }
 
-static const char *setEnabled(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+static void *mergeSrvConf(apr_pool_t *p, void *basev, void *overridesv) {
+    const repudiator_config_t *base = (const repudiator_config_t *) basev;
+    const repudiator_config_t *overrides = (const repudiator_config_t *) overridesv;
+
+    repudiator_config_t *cfg = apr_pcalloc(p, sizeof(repudiator_config_t));
+    if (!cfg) {
+        ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "Failed to allocate configuration");
+        return NULL;
+    }
+
+    *cfg = *base;
+    cfg->pool = base->pool;
+
+    cfg->enabled = overrides->enabled != -1 ? overrides->enabled : cfg->enabled;
+
+    mergeIPVector(p, &cfg->ipReputation, &base->ipReputation, &overrides->ipReputation);
+    mergeREVector(p, &cfg->uaReputation, &base->uaReputation, &overrides->uaReputation);
+    mergeREVector(p, &cfg->uriReputation, &base->uriReputation, &overrides->uriReputation);
+    mergeASNVector(p, &cfg->asnReputation, &base->asnReputation, &overrides->asnReputation);
+    mergeCountryVector(p, &cfg->countryReputation, &base->countryReputation, &overrides->countryReputation);
+    mergeStatusVector(p, &cfg->statusReputation, &base->statusReputation, &overrides->statusReputation);
+
+    cfg->set = base->set | overrides->set;
+
+    ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "warnReputation %2.f = %2.f", cfg->warnReputation,
+                 overrides->warnReputation);
+
+    // A value from overrides takes precedence as soon as it is explicitly set in this context, even if it corresponds to the default.
+#define MERGE_IF_SET(flag, field)       \
+    do {                                \
+        if (overrides->set & (flag)) {  \
+            cfg->field = overrides->field; \
+        }                               \
+    } while (0)
+
+    MERGE_IF_SET(REP_SET_WARN_REPUTATION, warnReputation);
+    MERGE_IF_SET(REP_SET_BLOCK_REPUTATION, blockReputation);
+    MERGE_IF_SET(REP_SET_PER_IP_REPUTATION, perIPReputation);
+    MERGE_IF_SET(REP_SET_PER_NET_REPUTATION, perNetworkReputation);
+    MERGE_IF_SET(REP_SET_PER_ASN_REPUTATION, perASNReputation);
+    MERGE_IF_SET(REP_SET_SCAN_TIME, scanTime);
+    MERGE_IF_SET(REP_SET_WARN_HTTP_REPLY, warnHttpReply);
+    MERGE_IF_SET(REP_SET_BLOCK_HTTP_REPLY, blockHttpReply);
+    MERGE_IF_SET(REP_SET_STATE_TEMPLATE, stateTemplate);
+    MERGE_IF_SET(REP_SET_POW_TEMPLATE, powTemplate);
+    MERGE_IF_SET(REP_SET_POW_URI, powURI);
+    MERGE_IF_SET(REP_SET_POW_DIFFICULTY, powDifficulty);
+    MERGE_IF_SET(REP_SET_POW_COOKIE_MAXAGE, powCookieMaxAge);
+    MERGE_IF_SET(REP_SET_POW_ABOVE_REPUTATION, powAboveReputation);
+    MERGE_IF_SET(REP_SET_POW_BELOW_REPUTATION, powBelowReputation);
+
+#undef MERGE_IF_SET
+
+    cfg->powCookiePassphrase = overrides->powCookiePassphrase != NULL
+                                   ? overrides->powCookiePassphrase
+                                   : cfg->powCookiePassphrase;
+
+    return cfg;
+}
+
+static const char *setEnabled(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value) {
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
 
     if (strcmp("true", value) == 0) {
         cfg->enabled = 1;
@@ -2349,8 +2525,8 @@ static apr_status_t cleanupDatabase(void *mmdb) {
     return APR_SUCCESS;
 }
 
-static const char *setASNDatabase(cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+static const char *setASNDatabase(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value) {
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
 
     cfg->asnDBPath = apr_pstrdup(cfg->pool, value);
 
@@ -2369,8 +2545,8 @@ static const char *setASNDatabase(cmd_parms *cmd, void *dconfig, const char *val
     return NULL;
 }
 
-static const char *setCountryDatabase(cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+static const char *setCountryDatabase(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value) {
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
 
     cfg->countryDBPath = apr_pstrdup(cfg->pool, value);
 
@@ -2389,9 +2565,9 @@ static const char *setCountryDatabase(cmd_parms *cmd, void *dconfig, const char 
     return NULL;
 }
 
-static const char *setIPReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value,
+static const char *setIPReputation(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value,
                                    const char *value2) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
 
     const int rc = parseIPReputation(&cfg->ipReputation, value, value2);
 
@@ -2405,9 +2581,9 @@ static const char *setIPReputation(__attribute__((unused)) cmd_parms *cmd, void 
     return NULL;
 }
 
-static const char *setUAReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value,
+static const char *setUAReputation(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value,
                                    const char *value2) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
 
     const int rc = parseRegexReputation(&cfg->uaReputation, value, value2);
 
@@ -2421,9 +2597,9 @@ static const char *setUAReputation(__attribute__((unused)) cmd_parms *cmd, void 
     return NULL;
 }
 
-static const char *setURIReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value,
+static const char *setURIReputation(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value,
                                     const char *value2) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
 
     const int rc = parseRegexReputation(&cfg->uriReputation, value, value2);
 
@@ -2437,9 +2613,9 @@ static const char *setURIReputation(__attribute__((unused)) cmd_parms *cmd, void
     return NULL;
 }
 
-static const char *setASNReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value,
+static const char *setASNReputation(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value,
                                     const char *value2) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
 
     const int rc = parseASNReputation(&cfg->asnReputation, value, value2);
 
@@ -2453,9 +2629,9 @@ static const char *setASNReputation(__attribute__((unused)) cmd_parms *cmd, void
     return NULL;
 }
 
-static const char *setCountryReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value,
+static const char *setCountryReputation(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value,
                                         const char *value2) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
 
     const int rc = parseCountryReputation(cfg->pool, &cfg->countryReputation, value, value2);
 
@@ -2469,9 +2645,9 @@ static const char *setCountryReputation(__attribute__((unused)) cmd_parms *cmd, 
     return NULL;
 }
 
-static const char *setStatusReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value,
+static const char *setStatusReputation(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value,
                                        const char *value2) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
 
     const int rc = parseStatusReputation(&cfg->statusReputation, value, value2);
 
@@ -2485,8 +2661,9 @@ static const char *setStatusReputation(__attribute__((unused)) cmd_parms *cmd, v
     return NULL;
 }
 
-static const char *setWarnReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+static const char *setWarnReputation(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value) {
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
+    cfg->set |= REP_SET_WARN_REPUTATION;
     char *endptr;
     double n;
 
@@ -2504,8 +2681,9 @@ static const char *setWarnReputation(__attribute__((unused)) cmd_parms *cmd, voi
     return NULL;
 }
 
-static const char *setBlockReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+static const char *setBlockReputation(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value) {
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
+    cfg->set |= REP_SET_BLOCK_REPUTATION;
     char *endptr;
     double n;
 
@@ -2523,8 +2701,9 @@ static const char *setBlockReputation(__attribute__((unused)) cmd_parms *cmd, vo
     return NULL;
 }
 
-static const char *setPerIPReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+static const char *setPerIPReputation(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value) {
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
+    cfg->set |= REP_SET_PER_IP_REPUTATION;
     char *endptr;
     double n;
 
@@ -2542,8 +2721,9 @@ static const char *setPerIPReputation(__attribute__((unused)) cmd_parms *cmd, vo
     return NULL;
 }
 
-static const char *setPerNetworkReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+static const char *setPerNetworkReputation(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value) {
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
+    cfg->set |= REP_SET_PER_NET_REPUTATION;
     char *endptr;
     double n;
 
@@ -2561,8 +2741,9 @@ static const char *setPerNetworkReputation(__attribute__((unused)) cmd_parms *cm
     return NULL;
 }
 
-static const char *setPerASNReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+static const char *setPerASNReputation(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value) {
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
+    cfg->set |= REP_SET_PER_ASN_REPUTATION;
     char *endptr;
     double n;
 
@@ -2580,8 +2761,9 @@ static const char *setPerASNReputation(__attribute__((unused)) cmd_parms *cmd, v
     return NULL;
 }
 
-static const char *setScanTime(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+static const char *setScanTime(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value) {
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
+    cfg->set |= REP_SET_SCAN_TIME;
     char *endptr;
     long n;
 
@@ -2599,8 +2781,9 @@ static const char *setScanTime(__attribute__((unused)) cmd_parms *cmd, void *dco
     return NULL;
 }
 
-static const char *setWarnHttpReply(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+static const char *setWarnHttpReply(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value) {
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
+    cfg->set |= REP_SET_WARN_HTTP_REPLY;
     char *endptr;
     long n;
 
@@ -2618,8 +2801,9 @@ static const char *setWarnHttpReply(__attribute__((unused)) cmd_parms *cmd, void
     return NULL;
 }
 
-static const char *setBlocHttpReply(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+static const char *setBlocHttpReply(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value) {
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
+    cfg->set |= REP_SET_BLOCK_HTTP_REPLY;
     char *endptr;
     long n;
 
@@ -2637,8 +2821,8 @@ static const char *setBlocHttpReply(__attribute__((unused)) cmd_parms *cmd, void
     return NULL;
 }
 
-static const char *setStateTemplateFile(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+static const char *setStateTemplateFile(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value) {
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
 
     FILE *fp = fopen(value, "r");
 
@@ -2653,6 +2837,7 @@ static const char *setStateTemplateFile(__attribute__((unused)) cmd_parms *cmd, 
         fclose(fp);
 
         cfg->stateTemplate = apr_pstrdup(cfg->pool, source);
+        cfg->set |= REP_SET_STATE_TEMPLATE;
     } else {
         ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
                      "Couldn't open RepudiatorStateTemplateFile for value '%s'",
@@ -2662,8 +2847,9 @@ static const char *setStateTemplateFile(__attribute__((unused)) cmd_parms *cmd, 
     return NULL;
 }
 
-static const char *setPOWUri(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+static const char *setPOWUri(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value) {
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
+    cfg->set |= REP_SET_POW_URI;
 
     if (value != NULL && *value != '\0' && value[0] != '/') {
         cfg->powURI = apr_pstrdup(cfg->pool, value);
@@ -2677,8 +2863,8 @@ static const char *setPOWUri(__attribute__((unused)) cmd_parms *cmd, void *dconf
     return NULL;
 }
 
-static const char *setPOWTemplateFile(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+static const char *setPOWTemplateFile(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value) {
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
 
     FILE *fp = fopen(value, "r");
 
@@ -2693,6 +2879,7 @@ static const char *setPOWTemplateFile(__attribute__((unused)) cmd_parms *cmd, vo
         fclose(fp);
 
         cfg->powTemplate = apr_pstrdup(cfg->pool, source);
+        cfg->set |= REP_SET_POW_TEMPLATE;
     } else {
         ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
                      "Couldn't open RepudiatorPOWTemplateFile for value '%s'",
@@ -2702,8 +2889,8 @@ static const char *setPOWTemplateFile(__attribute__((unused)) cmd_parms *cmd, vo
     return NULL;
 }
 
-static const char *setPOWCookiePassphrase(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+static const char *setPOWCookiePassphrase(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value) {
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
 
     if (value != NULL && *value != '\0') {
         cfg->powCookiePassphrase = apr_pstrdup(cfg->pool, value);
@@ -2712,8 +2899,9 @@ static const char *setPOWCookiePassphrase(__attribute__((unused)) cmd_parms *cmd
     return NULL;
 }
 
-static const char *setPOWDifficulty(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+static const char *setPOWDifficulty(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value) {
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
+    cfg->set |= REP_SET_POW_DIFFICULTY;
     char *endptr;
     long n;
 
@@ -2731,8 +2919,9 @@ static const char *setPOWDifficulty(__attribute__((unused)) cmd_parms *cmd, void
     return NULL;
 }
 
-static const char *setPOWCookieMaxAge(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+static const char *setPOWCookieMaxAge(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value) {
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
+    cfg->set |= REP_SET_POW_COOKIE_MAXAGE;
     char *endptr;
     long n;
 
@@ -2750,8 +2939,9 @@ static const char *setPOWCookieMaxAge(__attribute__((unused)) cmd_parms *cmd, vo
     return NULL;
 }
 
-static const char *setPOWAboveReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+static const char *setPOWAboveReputation(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value) {
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
+    cfg->set |= REP_SET_POW_ABOVE_REPUTATION;
     char *endptr;
     double n;
 
@@ -2769,8 +2959,9 @@ static const char *setPOWAboveReputation(__attribute__((unused)) cmd_parms *cmd,
     return NULL;
 }
 
-static const char *setPOWBelowReputation(__attribute__((unused)) cmd_parms *cmd, void *dconfig, const char *value) {
-    repudiator_config_t *cfg = (repudiator_config_t *) dconfig;
+static const char *setPOWBelowReputation(cmd_parms *cmd, __attribute__((unused)) void *dconfig, const char *value) {
+    repudiator_config_t *cfg = ap_get_module_config(cmd->server->module_config, &repudiator_module);
+    cfg->set |= REP_SET_POW_BELOW_REPUTATION;
     char *endptr;
     double n;
 
@@ -2865,10 +3056,10 @@ static void registerHooks(apr_pool_t *p) {
 
 AP_DECLARE_MODULE(repudiator) = {
     STANDARD20_MODULE_STUFF,
-    createDirConf,
     NULL,
     NULL,
-    NULL,
+    createSrvConf,
+    mergeSrvConf,
     configCmds,
     registerHooks,
     AP_MODULE_FLAG_NONE
