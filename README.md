@@ -40,6 +40,10 @@ Runtime (APR), libmaxminddb and, optionally, PCRE2.
 - optional passphrase-based encoding of the POW cookie
 - MaxMind database integration for ASN and country lookups
 - optional PCRE2 regex engine
+- case-insensitive regex matching (POSIX and PCRE2)
+- PCRE2 match limit as protection against catastrophic backtracking
+- virtual-host aware configuration with inheritance from the global server
+  configuration
 - `X-Reputation` response header
 - optional debug logging
 - persistent request statistics
@@ -179,6 +183,12 @@ RepudiatorCountryDatabase /path/to/GeoLite2-Country.mmdb
 If no matching MaxMind entry is found, the module falls back to a host-specific
 network mask (`/32` for IPv4 or `/128` for IPv6).
 
+The databases are a global setting. Configure them in the global server
+context. Virtual hosts always use the databases of the global configuration;
+`RepudiatorASNDatabase` and `RepudiatorCountryDatabase` inside a `<VirtualHost>`
+are ignored (see [Virtual hosts and configuration
+inheritance](#virtual-hosts-and-configuration-inheritance)).
+
 ## Build
 
 ### Standard build
@@ -223,7 +233,9 @@ RepudiatorBlockReputation -400
 
 The module configuration commands are restricted to server configuration
 contexts (`RSRC_CONF`), i.e. they are intended for the Apache server or
-virtual-host configuration.
+virtual-host configuration. Settings in a `<VirtualHost>` are merged with the
+global configuration, see [Virtual hosts and configuration
+inheritance](#virtual-hosts-and-configuration-inheritance).
 
 After changing the Apache configuration, validate it before restarting:
 
@@ -266,6 +278,10 @@ RepudiatorEnabled false
 ```
 
 Invalid values disable the module and are logged as warnings.
+
+The directive has three states: not set, `true` and `false`. If it is not set
+in a virtual host, the value of the global configuration is inherited. If it
+is set neither globally nor in the virtual host, the module is disabled.
 
 ### Reputation thresholds
 
@@ -373,6 +389,20 @@ The regular expression engine is:
 - PCRE2 when compiled with `-DPCRE2`
 - POSIX extended regular expressions otherwise
 
+Matching is case-insensitive with both engines (`REG_ICASE` for POSIX,
+`PCRE2_CASELESS` for PCRE2). With PCRE2 a single pattern can be made
+case-sensitive again by starting it with the inline flag `(?-i)`.
+
+An invalid regular expression is skipped and reported in the Apache error log
+during startup. With PCRE2 the log entry contains the error message and the
+offset within the pattern.
+
+With PCRE2 every match is limited to 100000 backtracking steps
+(`REGEX_MATCH_LIMIT` in the source) to protect against catastrophic patterns on
+attacker-controlled input. If the limit is exceeded or another matching error
+occurs, a warning is logged and the rule is treated as a match, i.e. its
+reputation value is applied. The POSIX engine has no such limit.
+
 ### URI reputation
 
 #### `RepudiatorURIReputation`
@@ -385,7 +415,8 @@ Example:
 RepudiatorURIReputation ".*\\.(env|git|bash(rc|_(history|profile))).*" -1000.0
 ```
 
-Multiple URI rules can be configured.
+Multiple URI rules can be configured. Matching behaviour, case sensitivity and
+error handling are the same as for `RepudiatorUAReputation`.
 
 ### ASN reputation
 
@@ -401,6 +432,8 @@ RepudiatorASNReputation 15169 100.0
 
 ASN `0` can be used as a fallback/default ASN rule when no more specific
 matching ASN is configured.
+
+An exact ASN match always takes precedence over the `0` fallback rule.
 
 ### Country reputation
 
@@ -614,6 +647,63 @@ AND
 reputation >= RepudiatorPOWBelowReputation
 ```
 
+## Virtual hosts and configuration inheritance
+
+A `<VirtualHost>` inherits the global server configuration and can extend or
+override it. The effective configuration of a virtual host is built as follows:
+
+| Directive | Behaviour in a virtual host |
+|-----------|-----------------------------|
+| `RepudiatorEnabled` | An explicitly set value overrides the global one. Not set anywhere: disabled. |
+| `RepudiatorIPReputation`, `RepudiatorUAReputation`, `RepudiatorURIReputation` | Additive: global and virtual-host rules all apply and their reputation values are summed up. |
+| `RepudiatorASNReputation`, `RepudiatorCountryReputation`, `RepudiatorStatusReputation` | Virtual-host rules take precedence. A global rule with the same key (ASN, country code, status code) is replaced; all other global rules remain in effect. |
+| `RepudiatorWarnReputation`, `RepudiatorBlockReputation`, `RepudiatorPerIPReputation`, `RepudiatorPerNetReputation`, `RepudiatorPerASNReputation`, `RepudiatorScanTime` | Inherited unless set in the virtual host. |
+| `RepudiatorWarnHttpReply`, `RepudiatorBlockHttpReply` | Inherited unless set in the virtual host. |
+| `RepudiatorPOWUri`, `RepudiatorPOWDifficulty`, `RepudiatorPOWCookieMaxAge`, `RepudiatorPOWAboveReputation`, `RepudiatorPOWBelowReputation` | Inherited unless set in the virtual host. |
+| `RepudiatorStateTemplateFile`, `RepudiatorPOWTemplateFile` | Inherited unless a template was loaded successfully in the virtual host. |
+| `RepudiatorPOWCookiePassphrase` | The virtual-host value if set, otherwise the global value. |
+| `RepudiatorASNDatabase`, `RepudiatorCountryDatabase` | Global only. Always taken from the global configuration; settings in a virtual host are ignored. |
+
+A value counts as set as soon as the directive appears in the virtual host, even
+if the value is identical to the built-in default. This makes it possible to
+reset a globally changed value to its default:
+
+```apache
+RepudiatorWarnReputation -100
+
+<VirtualHost *:443>
+    # explicitly back to the default (-200), overrides the global -100
+    RepudiatorWarnReputation -200
+</VirtualHost>
+```
+
+For numeric settings and `RepudiatorPOWUri`, an invalid value is replaced by the
+default and also counts as set.
+
+Example with additive and overriding rules:
+
+```apache
+RepudiatorEnabled true
+RepudiatorASNDatabase /var/lib/GeoIP/GeoLite2-ASN.mmdb
+
+RepudiatorUAReputation ".*badbot.*" -400.0
+RepudiatorCountryReputation CN -100.0
+RepudiatorCountryReputation DE 50.0
+
+<VirtualHost *:443>
+    ServerName shop.example.com
+
+    # additive: badbot (-400) and sqlmap (-500) both apply
+    RepudiatorUAReputation ".*sqlmap.*" -500.0
+
+    # replaces the global rule for CN, DE (50.0) stays in effect
+    RepudiatorCountryReputation CN 0.0
+</VirtualHost>
+```
+
+The request counters used for the per-IP, per-network and per-ASN penalties are
+keyed by client IP and are not separated per virtual host.
+
 ## Example configuration
 
 The following example combines several reputation sources:
@@ -697,6 +787,10 @@ Response filters
     +--> X-Reputation header
     +--> HTTP status reputation
 ```
+
+The rules of the effective (virtual-host) configuration are evaluated before the
+shared request counters are locked, so slow regular expressions do not block
+concurrent requests while the counters are updated.
 
 The module registers its access checks with Apache and also installs output and
 error filters. These filters add the `X-Reputation` header and feed the final
@@ -878,6 +972,16 @@ Configuration cleanup releases the dynamically allocated reputation vectors,
 regular expressions, request/network/ASN vectors and configured strings.
 MaxMind databases are registered with APR pool cleanup handlers.
 
+The merged configuration of a virtual host is allocated from the Apache
+configuration pool. It consists of shallow copies of the rules of the global
+and the virtual-host configuration: compiled regular expressions and strings
+remain owned by the configuration they were created in, so no separate cleanup
+is registered for the merged configuration.
+
+With PCRE2 the compiled patterns are shared, immutable objects. The match data
+and the match context are created per matching call, therefore regular
+expressions can be evaluated concurrently by multiple threads.
+
 Because the module runs inside the Apache process, memory handling errors can
 affect the complete Apache worker process. Production deployments should
 therefore be tested with the intended Apache MPM and representative traffic.
@@ -893,6 +997,10 @@ Recommended practices include:
 - carefully test reputation thresholds before enabling blocking
 - whitelist trusted networks using positive reputation where appropriate
 - test regular expressions against representative User-Agent and URI values
+- remember that regular expressions are matched case-insensitively and avoid
+  patterns prone to catastrophic backtracking
+- check the error log for `Regex matching failed` warnings (PCRE2 match limit);
+  affected rules are treated as a match
 - monitor Apache logs for false positives
 - validate Apache configuration before reload/restart
 - use fail2ban only after confirming that the generated log events are correct
@@ -938,6 +1046,23 @@ When changing reputation rules, test at least:
 - POW challenge and successful POW cookie
 - HTTP status reputation
 - response header generation
+
+## Upgrade notes
+
+- **Regular expressions are case-insensitive with PCRE2.** Earlier PCRE2 builds
+  matched case-sensitively, while POSIX builds were already case-insensitive.
+  Existing `RepudiatorUAReputation` and `RepudiatorURIReputation` rules may now
+  match more requests. Use `(?-i)` at the start of a pattern to keep it
+  case-sensitive.
+- **Invalid regular expressions are now reported** in PCRE2 builds. Previously
+  they were skipped without a log message.
+- **Virtual hosts inherit the global configuration.** Rules and settings from
+  the global configuration are merged into each virtual host as described in
+  [Virtual hosts and configuration
+  inheritance](#virtual-hosts-and-configuration-inheritance). `RepudiatorEnabled`
+  must be set (globally or per virtual host) for the module to be active.
+- **MaxMind databases are global only.** Database directives inside a
+  `<VirtualHost>` have no effect.
 
 ## License
 
