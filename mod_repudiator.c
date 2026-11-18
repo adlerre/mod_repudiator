@@ -103,6 +103,10 @@ module AP_MODULE_DECLARE_DATA repudiator_module;
 
 #define MAX_BUF_LEN 1000000
 
+// Upper bound for the backtracking steps of a single pcre2_match() call. Protects against catastrophic patterns
+// (ReDoS) on attacker controlled input such as the user agent or the URI. PCRE2's built-in default is 10,000,000.
+#define REGEX_MATCH_LIMIT 100000
+
 // Bit flags: which scalars were explicitly configured in this context (including the default value)?
 enum {
     REP_SET_WARN_REPUTATION = 1u << 0,
@@ -145,7 +149,6 @@ typedef struct {
 typedef struct {
 #ifdef PCRE2
     pcre2_code *re;
-    pcre2_match_data *match_data;
 #else
     regex_t re;
 #endif
@@ -754,17 +757,22 @@ static int parseRegexReputation(re_vector_t *reVector, const char *regex, const 
         pcre2_code *re = pcre2_compile(
             pattern, /* the pattern */
             PCRE2_ZERO_TERMINATED, /* indicates pattern is zero-terminated */
-            PCRE2_NO_AUTO_CAPTURE, /* Disable numbered capturing parentheses */
+            PCRE2_NO_AUTO_CAPTURE | PCRE2_CASELESS,
+            /* No numbered capturing parentheses, case-insensitive like REG_ICASE */
             &errornumber, /* for error number */
             &erroroffset, /* for error offset */
             NULL); /* use default compile context */
 
-        if (re) {
-            pcre2_match_data *match_data = pcre2_match_data_create_from_pattern(re, NULL);
-
+        if (re == NULL) {
+            PCRE2_UCHAR errbuf[256];
+            pcre2_get_error_message(errornumber, errbuf, sizeof(errbuf));
+            ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf,
+                         "Invalid regular expression '%s' at offset %d: %s", regex, (int) erroroffset,
+                         (const char *) errbuf);
+            rc = -2;
+        } else {
             re_node_t *node = reallocArray(reVector->data, reVector->size + 1, sizeof(*(reVector->data)));
             if (!node) {
-                pcre2_match_data_free(match_data);
                 pcre2_code_free(re);
                 return -1;
             }
@@ -772,7 +780,6 @@ static int parseRegexReputation(re_vector_t *reVector, const char *regex, const 
             reVector->data = node;
             reVector->data[reVector->size++] = (re_node_t){
                 .re = re,
-                .match_data = match_data,
                 .reputation = strtod(rep, NULL)
             };
         }
@@ -885,32 +892,64 @@ double calcIPReputation(const ip_vector_t *ipReputation, const ip_node_t *ipNode
 
 double calcRegexReputation(const re_vector_t *reVector, const char *str) {
     double ret = 0.0;
-    if (str != NULL && strlen(str) != 0) {
-        for (size_t i = 0; i < reVector->size; ++i) {
-            const re_node_t *node = &reVector->data[i];
+
+    if (str == NULL || *str == '\0' || reVector->size == 0) {
+        return ret;
+    }
+
 #ifdef PCRE2
-            PCRE2_SPTR subject = (PCRE2_SPTR) str;
-            size_t subject_length = strlen((const char *) subject);
+    // pcre2_match() writes into the match data, so it must not be shared between threads. The compiled patterns
+    // (pcre2_code) are immutable and may be shared. One small ovector is enough: only the match result is needed.
+    pcre2_match_data *match_data = pcre2_match_data_create(1, NULL);
+    pcre2_match_context *match_context = pcre2_match_context_create(NULL);
+    if (match_data == NULL || match_context == NULL) {
+        ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "Regex matching: OOM");
+        pcre2_match_data_free(match_data);
+        pcre2_match_context_free(match_context);
+        return ret;
+    }
+    pcre2_set_match_limit(match_context, REGEX_MATCH_LIMIT);
 
-            int rc = pcre2_match(
-                node->re, /* the compiled pattern */
-                subject, /* the subject string */
-                subject_length, /* the length of the subject */
-                0, /* start at offset 0 in the subject */
-                0, /* default options */
-                node->match_data, /* block for storing the result */
-                NULL);
+    const PCRE2_SPTR subject = (PCRE2_SPTR) str;
+    const size_t subject_length = strlen(str);
 
-            if (rc >= 0) {
-                ret += node->reputation;
-            }
-#else
-            if (!regexec(&node->re, str, 0, NULL, 0)) {
-                ret += node->reputation;
-            }
-#endif
+    for (size_t i = 0; i < reVector->size; ++i) {
+        const re_node_t *node = &reVector->data[i];
+
+        const int rc = pcre2_match(
+            node->re, /* the compiled pattern */
+            subject, /* the subject string */
+            subject_length, /* the length of the subject */
+            0, /* start at offset 0 in the subject */
+            0, /* default options */
+            match_data, /* block for storing the result */
+            match_context); /* match limit */
+
+        if (rc >= 0) {
+            ret += node->reputation;
+        } else if (rc != PCRE2_ERROR_NOMATCH) {
+            // e.g. PCRE2_ERROR_MATCHLIMIT: punishment for this too
+            PCRE2_UCHAR errbuf[256];
+            pcre2_get_error_message(rc, errbuf, sizeof(errbuf));
+            ap_log_error(APLOG_MARK, APLOG_WARNING, 0, ap_server_conf, "Regex matching failed: %s",
+                         (const char *) errbuf);
+
+            ret += node->reputation;
         }
     }
+
+    pcre2_match_data_free(match_data);
+    pcre2_match_context_free(match_context);
+#else
+    for (size_t i = 0; i < reVector->size; ++i) {
+        const re_node_t *node = &reVector->data[i];
+
+        if (!regexec(&node->re, str, 0, NULL, 0)) {
+            ret += node->reputation;
+        }
+    }
+#endif
+
     return ret;
 }
 
@@ -1071,6 +1110,12 @@ req_node_t *addRequest(repudiator_config_t *cfg, const ip_node_t *ip, const uint
         return NULL;
     }
 
+    const double ipRep = calcIPReputation(&cfg->ipReputation, ip);
+    const double uaRep = calcRegexReputation(&cfg->uaReputation, userAgent);
+    const double uriRep = calcRegexReputation(&cfg->uriReputation, uri);
+    const double asnRep = calcASNReputation(&cfg->asnReputation, asn);
+    const double countryRep = calcCountryReputation(&cfg->countryReputation, countryCode);
+
     apr_status_t rv = APR_ANYLOCK_LOCK(&(repudiator_requests->mutex));
     if (rv != APR_SUCCESS) {
         return NULL;
@@ -1096,11 +1141,11 @@ req_node_t *addRequest(repudiator_config_t *cfg, const ip_node_t *ip, const uint
         };
 
         node = &repudiator_requests->data[repudiator_requests->size - 1];
-        node->ipReputation = calcIPReputation(&cfg->ipReputation, ip);
-        node->uaReputation = calcRegexReputation(&cfg->uaReputation, userAgent);
-        node->uriReputation = calcRegexReputation(&cfg->uriReputation, uri);
-        node->asnReputation = calcASNReputation(&cfg->asnReputation, asn);
-        node->countryReputation = calcCountryReputation(&cfg->countryReputation, countryCode);
+        node->ipReputation = ipRep;
+        node->uaReputation = uaRep;
+        node->uriReputation = uriRep;
+        node->asnReputation = asnRep;
+        node->countryReputation = countryRep;
 
         APR_ANYLOCK_UNLOCK(&(repudiator_requests->mutex));
 
@@ -1115,18 +1160,18 @@ req_node_t *addRequest(repudiator_config_t *cfg, const ip_node_t *ip, const uint
             return NULL;
         }
         node->count++;
-        node->ipReputation += calcIPReputation(&cfg->ipReputation, ip);
-        node->uaReputation += calcRegexReputation(&cfg->uaReputation, userAgent);
-        node->uriReputation += calcRegexReputation(&cfg->uriReputation, uri);
-        node->asnReputation += calcASNReputation(&cfg->asnReputation, asn);
-        node->countryReputation += calcCountryReputation(&cfg->countryReputation, countryCode);
+        node->ipReputation += ipRep;
+        node->uaReputation += uaRep;
+        node->uriReputation += uriRep;
+        node->asnReputation += asnRep;
+        node->countryReputation += countryRep;
     } else {
         node->count = 1;
-        node->ipReputation = calcIPReputation(&cfg->ipReputation, ip);
-        node->uaReputation = calcRegexReputation(&cfg->uaReputation, userAgent);
-        node->uriReputation = calcRegexReputation(&cfg->uriReputation, uri);
-        node->asnReputation = calcASNReputation(&cfg->asnReputation, asn);
-        node->countryReputation = calcCountryReputation(&cfg->countryReputation, countryCode);
+        node->ipReputation = ipRep;
+        node->uaReputation = uaRep;
+        node->uriReputation = uriRep;
+        node->asnReputation = asnRep;
+        node->countryReputation = countryRep;
     }
     node->lastSeen = timestamp;
 
@@ -2286,7 +2331,6 @@ static void destroyREVector(const re_vector_t *vec) {
     for (size_t i = 0; i < vec->size; i++) {
         re_node_t *node = &vec->data[i];
         pcre2_code_free(node->re);
-        pcre2_match_data_free(node->match_data);
     }
 #else
     for (size_t i = 0; i < vec->size; i++) {
@@ -2467,9 +2511,6 @@ static void *mergeSrvConf(apr_pool_t *p, void *basev, void *overridesv) {
     mergeStatusVector(p, &cfg->statusReputation, &base->statusReputation, &overrides->statusReputation);
 
     cfg->set = base->set | overrides->set;
-
-    ap_log_error(APLOG_MARK, APLOG_ERR, 0, ap_server_conf, "warnReputation %2.f = %2.f", cfg->warnReputation,
-                 overrides->warnReputation);
 
     // A value from overrides takes precedence as soon as it is explicitly set in this context, even if it corresponds to the default.
 #define MERGE_IF_SET(flag, field)       \
