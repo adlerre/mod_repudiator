@@ -55,7 +55,9 @@ jobs:
         run: npm run pow_template && npm run state_template
 
       - name: Install dependencies
-        run: sudo apt -y install gcc apache2-dev libmaxminddb-dev libpcre2-dev
+        run: |
+          sudo apt update
+          sudo apt -y install gcc apache2-dev libmaxminddb-dev libpcre2-dev
 
       - if: ${{ matrix.build == 'regex' }}
         name: Build module
