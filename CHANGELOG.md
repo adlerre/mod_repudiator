@@ -1,3 +1,16 @@
+# [1.25.0](https://github.com/adlerre/mod_repudiator/compare/v1.24.2...v1.25.0) (2026-11-18)
+
+
+### Bug Fixes
+
+* improve PCRE2 error handling and limits ([#20](https://github.com/adlerre/mod_repudiator/issues/20)) ([b41c6b6](https://github.com/adlerre/mod_repudiator/commit/b41c6b66ade070979b6cfd2d42ea7f34f64e6cab))
+* update README to match last changes ([9c15598](https://github.com/adlerre/mod_repudiator/commit/9c15598b5388e790c0193e826e6b5c3a13dc9c02))
+
+
+### Features
+
+* switch to server-based configuration and its override-ability o… ([#19](https://github.com/adlerre/mod_repudiator/issues/19)) ([450d9de](https://github.com/adlerre/mod_repudiator/commit/450d9de0ec518f90716cca726c76d098f9ef7d45))
+
 ## [1.24.2](https://github.com/adlerre/mod_repudiator/compare/v1.24.1...v1.24.2) (2026-09-26)
 
 
